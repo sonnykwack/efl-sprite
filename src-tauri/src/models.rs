@@ -7,8 +7,10 @@
 use crate::paths;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, State};
 use tokio::io::AsyncWriteExt;
 
 const CATALOG_JSON: &str = include_str!("../catalog/models.json");
@@ -83,8 +85,40 @@ pub fn list_models(app: AppHandle) -> Result<Vec<ModelEntry>, String> {
         .collect())
 }
 
+/// Model ids currently downloading. Two concurrent downloads of the same model would
+/// share one `.part` file; whichever finishes second then fails to rename it (ENOENT).
+#[derive(Default)]
+pub struct Downloads(pub Mutex<HashSet<String>>);
+
+/// Removes the id from `Downloads` however the download ends (ok, error, panic).
+struct InFlight<'a> {
+    set: &'a Mutex<HashSet<String>>,
+    id: String,
+}
+impl Drop for InFlight<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut s) = self.set.lock() {
+            s.remove(&self.id);
+        }
+    }
+}
+
 #[tauri::command]
-pub async fn download_model(app: AppHandle, id: String) -> Result<(), String> {
+pub async fn download_model(app: AppHandle, downloads: State<'_, Downloads>, id: String) -> Result<(), String> {
+    {
+        let mut set = downloads.0.lock().map_err(|e| e.to_string())?;
+        if !set.insert(id.clone()) {
+            // Silently ignore the repeat click; the first download keeps reporting progress.
+            return Ok(());
+        }
+    }
+    let _guard = InFlight { set: &downloads.0, id: id.clone() };
+
+    // Tell the UI immediately so the button turns into a progress bar on click.
+    let _ = app.emit(
+        "model-download-progress",
+        Progress { id: &id, downloaded: 0, total: None, done: false, error: None },
+    );
     let result = download_inner(&app, &id).await;
     if let Err(e) = &result {
         let _ = app.emit(

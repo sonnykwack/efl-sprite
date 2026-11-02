@@ -145,7 +145,14 @@ export default function SettingsPage() {
                       </button>
                     ) : (
                       <button
-                        onClick={() => api.downloadModel(m.id).catch((e) => setLog(String(e)))}
+                        onClick={() => {
+                          // Show the progress bar right away so the button can't be clicked twice.
+                          setProgress((prev) => ({
+                            ...prev,
+                            [m.id]: { id: m.id, downloaded: 0, total: null, done: false, error: null },
+                          }));
+                          api.downloadModel(m.id).catch((e) => setLog(String(e)));
+                        }}
                         className="rounded-lg bg-sprite-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sprite-600"
                       >
                         다운로드

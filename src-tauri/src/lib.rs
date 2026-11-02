@@ -43,6 +43,7 @@ fn app_info(app: AppHandle) -> Result<AppInfo, String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(engine::llama::LlamaState::default())
+        .manage(models::Downloads::default())
         .setup(|app| {
             let db = db::open(app.handle())?;
             app.manage(db);
