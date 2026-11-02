@@ -39,6 +39,8 @@ const SAMPLE_RESPONSE =
 const JFK_TARGET =
   "And so, my fellow Americans, ask not what your country can do for you; ask what you can do for your country.";
 
+const KIND_KO = { grammar: "문법", sentence: "문장 구조", word_choice: "어휘", register: "격식" } as const;
+
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(xs.length, 1);
 const sd = (xs: number[]) => {
   const m = mean(xs);
@@ -243,6 +245,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
                 <ul className="ml-4 list-disc text-ink-600">
                   {shown.errors.map((e, i) => (
                     <li key={i} className={e.grounded ? "" : "text-red-600"}>
+                      <span className="mr-1 rounded bg-white px-1 text-[10px] text-ink-400">{KIND_KO[e.kind]}</span>
                       <span className="line-through">{e.quote}</span> → <span className="font-semibold text-sprite-700">{e.correction}</span>
                       {!e.grounded && " (답안에 없는 인용)"}
                     </li>

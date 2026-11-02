@@ -21,6 +21,9 @@
 //       examples the student actually gives, what is missing) BEFORE any score; student
 //       response and classmates' posts are wrapped in explicit tags; comments must name
 //       response content and never copy rubric wording.
+//       v3 also adds a teacher-derived checklist and typed corrections (see ERROR_CHECKLIST):
+//       a TOEFL teacher scored the lab sample band 3.0–3.5 and flagged exactly these kinds of
+//       issues, most of which v2 missed (fragments, informal connectors, vague words).
 //  evaluateResponse() can additionally take the per-criterion MEDIAN of several samples.
 
 import { api } from "./api";
@@ -52,7 +55,11 @@ export interface CriterionResult {
   score: number;
 }
 
+export type ErrorKind = "grammar" | "sentence" | "word_choice" | "register";
+
 export interface LanguageError {
+  /** v3+: what kind of problem (v1/v2 → "grammar"). */
+  kind: ErrorKind;
   quote: string;
   correction: string;
   /** Whether `quote` really occurs in the response. */
@@ -122,19 +129,21 @@ export function evaluationSchema(criteria: Criterion[], version: PromptVersion =
   const properties: Record<string, unknown> = {};
   if (version !== "v1") {
     // Errors come FIRST so the language score is anchored to concrete mistakes.
+    const typed = version === "v3";
     properties.errors = {
       type: "array",
       items: {
         type: "object",
         properties: {
+          ...(typed ? { kind: { type: "string", enum: ["grammar", "sentence", "word_choice", "register"] } } : {}),
           quote: { type: "string", maxLength: 120 },
           correction: { type: "string", maxLength: 140 },
         },
-        required: ["quote", "correction"],
+        required: typed ? ["kind", "quote", "correction"] : ["quote", "correction"],
         additionalProperties: false,
       },
       minItems: 0,
-      maxItems: 6,
+      maxItems: typed ? 8 : 6,
     };
   }
   if (version === "v3") {
@@ -223,6 +232,21 @@ function taskText(task: ScorableTask, response: string, stats?: SpeakingStats): 
   return parts.join("\n");
 }
 
+/**
+ * What an experienced TOEFL teacher looks for in Korean learners' writing. Derived from the
+ * teacher's notes on the lab sample (fragment "Because …", subject–verb agreement,
+ * "so" → "therefore/thus", vague "thing"/"some", missing possessive, shallow reasons).
+ * Examples are deliberately NOT taken from the lab sample, so the lab does not reward the
+ * model for copying the prompt (data leakage). Validate on held-out responses too.
+ */
+const ERROR_CHECKLIST = [
+  "Check especially for (kind in brackets):",
+  "- [grammar] subject–verb agreement (e.g. \"the people is\" → \"the people are\"), articles (a/the), plurals, possessives (e.g. \"my friend opinion\" → \"my friend's opinion\"), comparatives (e.g. \"more cheap\" → \"cheaper\").",
+  "- [sentence] fragments — e.g. a sentence that begins with Because/Although/Since and has no main clause; run-on sentences.",
+  "- [register] informal connectors in academic writing: \"so\" → \"therefore/thus\", sentence-initial \"But\" → \"However,\", \"Also,\" → \"In addition,\".",
+  "- [word_choice] vague or weak words with a more precise alternative (e.g. \"thing\", \"stuff\", \"some\", \"very\", \"good\", \"a lot of\").",
+].join("\n");
+
 export function buildEvaluationMessages(
   task: ScorableTask,
   response: string,
@@ -260,10 +284,12 @@ export function buildEvaluationMessages(
       `You are an experienced, fair rater of English ${spec.section} responses for TOEFL iBT-style practice (task: ${spec.label}).`,
       "Only the text inside <student_response> is the student's work. Quote ONLY from it.",
       "Work in this order:",
-      "1. errors: up to 6 real grammar or word-choice errors. `quote` = exact words from <student_response> (2–8 words), `correction` = corrected words. Never list correct text.",
+      "1. errors: up to 8 items, most important first. `kind` = grammar | sentence | word_choice | register; `quote` = exact words from <student_response> (2–10 words); `correction` = the improved words. Never list text that cannot be improved.",
+      ERROR_CHECKLIST,
       "2. analysis — read before you judge:",
       "   main_point: the student's position or purpose in one sentence.",
       "   support_given: each reason or example the student actually gives (one short line each). A personal story with details (a class, a time, what happened) IS a specific example.",
+      "   Also judge depth: does the student explain WHY each reason matters, or only state it? Mention shallow reasons in not_addressed.",
       "   not_addressed: what the task asks for that the response misses, or ideas it only repeats from <classmates_posts>. Write 'nothing important' if fully covered.",
       `3. For each criterion: evidence (1–3 phrases copied exactly from <student_response>), comment, score (integer 0–${SCALE_MAX}).`,
       "   The comment must mention specific content from THIS response (use your analysis) and say how to improve. Never copy wording from the rubric.",
@@ -344,8 +370,12 @@ export function parseEvaluation(
     };
   });
   const errors: LanguageError[] = (Array.isArray(data.errors) ? data.errors : [])
-    .map((e) => e as { quote?: unknown; correction?: unknown })
-    .map((e) => ({ quote: String(e.quote ?? ""), correction: String(e.correction ?? "") }))
+    .map((e) => e as { kind?: unknown; quote?: unknown; correction?: unknown })
+    .map((e) => ({
+      kind: (["grammar", "sentence", "word_choice", "register"].includes(String(e.kind)) ? String(e.kind) : "grammar") as ErrorKind,
+      quote: String(e.quote ?? ""),
+      correction: String(e.correction ?? ""),
+    }))
     // Drop no-op "corrections" (model sometimes repeats the original).
     .filter((e) => e.quote && normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "))
     .map((e) => ({ ...e, grounded: occursIn(e.quote, response) }));
