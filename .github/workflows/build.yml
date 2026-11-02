@@ -1,0 +1,69 @@
+name: build
+
+# Every push builds the app on macOS and Windows, so a change that breaks one OS
+# is caught the same day — not on submission day.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos
+            runner: macos-latest       # Apple Silicon
+            bundle: src-tauri/target/release/bundle/macos
+          - name: windows
+            runner: windows-latest
+            bundle: src-tauri/target/release/bundle/nsis
+    runs-on: ${{ matrix.runner }}
+    name: ${{ matrix.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      # Engines are cached per OS and per fetch-script version; bump the script
+      # (or clear the cache) to pick up new llama.cpp / whisper.cpp releases.
+      - name: Cache engines
+        id: engines
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/engines/${{ matrix.name }}
+          key: engines-${{ matrix.name }}-${{ hashFiles('scripts/fetch-engines.mjs') }}
+
+      - run: npm ci
+
+      - name: Fetch engines
+        if: steps.engines.outputs.cache-hit != 'true'
+        run: npm run fetch-engines
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build app
+        run: npx tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: efl-sprite-${{ matrix.name }}
+          path: ${{ matrix.bundle }}
+          if-no-files-found: error
+          retention-days: 14

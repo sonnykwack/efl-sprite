@@ -1,0 +1,68 @@
+[
+  {
+    "id": "whisper-base-en",
+    "kind": "whisper",
+    "name": "Whisper base.en",
+    "file": "ggml-base.en.bin",
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
+    "sizeMb": 142,
+    "minVramGb": 0,
+    "recommended": false,
+    "notes": "가장 가벼움 · 저사양 PC용"
+  },
+  {
+    "id": "whisper-small-en",
+    "kind": "whisper",
+    "name": "Whisper small.en",
+    "file": "ggml-small.en.bin",
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin",
+    "sizeMb": 466,
+    "minVramGb": 2,
+    "recommended": true,
+    "notes": "정확도·속도 균형 · 기본값"
+  },
+  {
+    "id": "whisper-medium-en-q5",
+    "kind": "whisper",
+    "name": "Whisper medium.en (Q5)",
+    "file": "ggml-medium.en-q5_0.bin",
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin",
+    "sizeMb": 515,
+    "minVramGb": 4,
+    "recommended": false,
+    "notes": "억양이 강한 발화에 더 강함 · 느림"
+  },
+  {
+    "id": "llm-qwen2.5-3b",
+    "kind": "llm",
+    "name": "Qwen2.5 3B Instruct (Q4_K_M)",
+    "file": "qwen2.5-3b-instruct-q4_k_m.gguf",
+    "url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
+    "sizeMb": 2000,
+    "minVramGb": 4,
+    "recommended": true,
+    "notes": "기본값 · 대부분의 노트북에서 동작"
+  },
+  {
+    "id": "llm-gemma3-4b",
+    "kind": "llm",
+    "name": "Gemma 3 4B IT (Q4_K_M)",
+    "file": "google_gemma-3-4b-it-Q4_K_M.gguf",
+    "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf",
+    "sizeMb": 2400,
+    "minVramGb": 6,
+    "recommended": false,
+    "notes": "영어 첨삭 문장이 자연스러움"
+  },
+  {
+    "id": "llm-qwen2.5-7b",
+    "kind": "llm",
+    "name": "Qwen2.5 7B Instruct (Q4_K_M)",
+    "file": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    "sizeMb": 4500,
+    "minVramGb": 8,
+    "recommended": false,
+    "notes": "고사양 PC용 · 채점 일관성 가장 높음"
+  }
+]

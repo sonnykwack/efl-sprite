@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "EFL Sprite",
+  "version": "0.1.0",
+  "identifier": "com.xogns.eflsprite",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "EFL Sprite",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 960,
+        "minHeight": 640
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "publisher": "Xogns",
+    "category": "Education",
+    "shortDescription": "On-device EFL speaking & writing coach",
+    "longDescription": "EFL Sprite scores English speaking and writing practice with on-device AI (Whisper + local LLM). No audio or text leaves the computer.",
+    "copyright": "© 2026 Xogns",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

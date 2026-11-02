@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* EFL Sprite palette — fresh lime/teal on a calm neutral base. */
+@theme {
+  --color-sprite-50: #f2fbf6;
+  --color-sprite-100: #dcf5e7;
+  --color-sprite-300: #8fdcb4;
+  --color-sprite-500: #22b57a;
+  --color-sprite-600: #179463;
+  --color-sprite-700: #127450;
+  --color-ink-900: #14211b;
+  --color-ink-600: #4b5b53;
+  --color-ink-400: #8a978f;
+  --font-sans: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f7faf8;
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* Desktop-app feel: no rubber-band text selection on chrome. */
+  user-select: none;
+}
+
+input,
+textarea,
+[data-selectable] {
+  user-select: text;
+}

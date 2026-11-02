@@ -1,0 +1,22 @@
+# deps / build output
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# engines are fetched per OS by `npm run fetch-engines` (keep only the READMEs)
+src-tauri/engines/*/*
+!src-tauri/engines/*/README.md
+
+# models are downloaded at runtime into the app data dir — never commit them
+*.gguf
+ggml-*.bin
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log

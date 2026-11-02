@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Merged into the macOS bundle by Tauri. Required for microphone recording. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>EFL Sprite는 스피킹 답변을 녹음해 기기 안에서만 채점합니다. 녹음은 외부로 전송되지 않습니다.</string>
+</dict>
+</plist>
