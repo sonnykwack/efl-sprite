@@ -49,7 +49,9 @@ export default function TasksPage() {
     refresh();
   };
 
-  const field = "w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-sprite-500";
+  const base = "rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-sprite-500";
+  const field = `w-full ${base}`;
+  const num = `${base} w-24 text-right`;
 
   return (
     <>
@@ -104,24 +106,24 @@ export default function TasksPage() {
         )}
         <div className="flex items-center gap-3 text-sm text-ink-600">
           {draft.section === "speaking" && (
-            <label className="flex items-center gap-2">
+            <label className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               준비
               <input
                 type="number"
                 min={0}
-                className={`${field} w-20`}
+                className={num}
                 value={draft.prepSeconds}
                 onChange={(e) => setDraft({ ...draft, prepSeconds: Number(e.target.value) })}
               />
               초
             </label>
           )}
-          <label className="flex items-center gap-2">
+          <label className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             응답
             <input
               type="number"
               min={10}
-              className={`${field} w-24`}
+              className={num}
               value={draft.responseSeconds}
               onChange={(e) => setDraft({ ...draft, responseSeconds: Number(e.target.value) })}
             />
@@ -129,7 +131,7 @@ export default function TasksPage() {
           </label>
           <button
             onClick={save}
-            className="ml-auto rounded-lg bg-sprite-500 px-4 py-2 font-semibold text-white hover:bg-sprite-600"
+            className="ml-auto shrink-0 rounded-lg bg-sprite-500 px-4 py-2 font-semibold text-white hover:bg-sprite-600"
           >
             문제 추가
           </button>
