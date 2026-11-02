@@ -61,7 +61,15 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
   comments, quotes taken from classmates' posts. v3 (default) = `analysis` (main point, support
   given, not addressed) BEFORE scores + tagged blocks (<student_response>, <classmates_posts>).
   Keep v1/v2 for the report comparison.
-- Production scoring = `evaluateResponse(..., samples: 3)` → per-criterion median (`combineSamples`).
+- v3 measured: 7B → SD ≤ 0.47, final band 3.5 (teacher 3.0–3.5) — best; 3B → overloaded
+  (junk corrections, grounding 33%). Catalog field `prompt` sets the version per model
+  (3B → v2, 7B → v3); 7B is the recommended model. Full log: `docs/scoring-experiments.md`.
+- Hybrid: `src/lib/rules.ts` adds deterministic checks (fragments, informal connectors, vague
+  words) the LLM misses; rule items win over overlapping LLM items.
+- `src/lib/snap.ts` maps every model quote to the closest real span of the response, so the
+  student always sees their own words. Report both raw and after-snap grounding.
+- Production scoring = `evaluateResponse(..., samples: 3)` → samples sent concurrently
+  (llama-server `--parallel 3`, 3 × 8192 ctx) → per-criterion median (`combineSamples`).
 - Feedback language: Korean by default (`lang: "ko"`), evidence stays verbatim English.
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.

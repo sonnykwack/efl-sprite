@@ -83,7 +83,9 @@ pub async fn llm_start(app: AppHandle, state: State<'_, LlamaState>, model_id: S
         let child = command(&bin, &data)
             .args(["-m", &model_arg])
             .args(["--host", "127.0.0.1", "--port", &port.to_string()])
-            .args(["-c", "8192"]) // context: prompt + rubric + essay + answer
+            // 3 parallel slots × 8192 tokens: the 3 scoring samples run concurrently
+            // (continuous batching) — much faster than 3 sequential requests on a GPU.
+            .args(["--parallel", "3", "-c", "24576"])
             .args(["-ngl", "999"]) // offload all layers to GPU when available (ignored on CPU builds)
             .args(["-t", &threads().to_string()])
             .arg("--jinja") // use the model's own chat template

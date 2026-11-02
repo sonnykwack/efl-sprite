@@ -40,8 +40,9 @@
     "url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
     "sizeMb": 2000,
     "minVramGb": 4,
-    "recommended": true,
-    "notes": "기본값 · 대부분의 노트북에서 동작"
+    "recommended": false,
+    "notes": "저사양 PC용 · 채점 흔들림 있음 (v2 프롬프트)",
+    "prompt": "v2"
   },
   {
     "id": "llm-gemma3-4b",
@@ -52,7 +53,8 @@
     "sizeMb": 2400,
     "minVramGb": 6,
     "recommended": false,
-    "notes": "영어 첨삭 문장이 자연스러움"
+    "notes": "영어 첨삭 문장이 자연스러움",
+    "prompt": "v3"
   },
   {
     "id": "llm-qwen2.5-7b",
@@ -62,7 +64,8 @@
     "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
     "sizeMb": 4500,
     "minVramGb": 8,
-    "recommended": false,
-    "notes": "고사양 PC용 · 채점 일관성 가장 높음"
+    "recommended": true,
+    "notes": "기본값 · 교사 채점과 가장 가까움 (v3 프롬프트)",
+    "prompt": "v3"
   }
 ]

@@ -28,6 +28,8 @@
 
 import { api } from "./api";
 import { normalizeWords } from "./accuracy";
+import { detectRuleIssues } from "./rules";
+import { snapQuote } from "./snap";
 import { SCALE_MAX, TASK_SPECS, toBand, type Criterion } from "./rubrics";
 import type { ChatMessage, TaskType } from "./types";
 
@@ -48,9 +50,12 @@ export interface CriterionResult {
   key: string;
   name: string;
   nameKo: string;
+  /** Evidence as shown to the student — snapped to the student's original words. */
   evidence: string[];
-  /** Share of evidence quotes actually found in the response (0–1). */
+  /** Share of the model's quotes that matched the response EXACTLY (before snapping). */
   grounded: number;
+  /** Share that matched exactly or could be snapped to an original span. */
+  groundedAfterSnap: number;
   comment: string;
   score: number;
 }
@@ -60,10 +65,15 @@ export type ErrorKind = "grammar" | "sentence" | "word_choice" | "register";
 export interface LanguageError {
   /** v3+: what kind of problem (v1/v2 → "grammar"). */
   kind: ErrorKind;
+  /** Shown text: the student's original words (snapped if the model paraphrased). */
   quote: string;
   correction: string;
-  /** Whether `quote` really occurs in the response. */
+  /** Whether the model's quote occurred exactly in the response. */
   grounded: boolean;
+  /** Whether `quote` is a real span of the response (exact or snapped). */
+  located: boolean;
+  /** Who found it: the LLM or a deterministic rule (src/lib/rules.ts). */
+  source: "llm" | "rule";
 }
 
 export interface ResponseAnalysis {
@@ -357,14 +367,17 @@ export function parseEvaluation(
   }
   const criteria: CriterionResult[] = spec.criteria.map((c) => {
     const item = (data[c.key] ?? {}) as { evidence?: unknown; comment?: unknown; score?: unknown };
-    const evidence = Array.isArray(item.evidence) ? item.evidence.map(String) : [];
+    const quotes = Array.isArray(item.evidence) ? item.evidence.map(String) : [];
+    const snaps = quotes.map((q) => snapQuote(q, response));
     const score = Math.min(SCALE_MAX, Math.max(0, Math.round(Number(item.score) || 0)));
     return {
       key: c.key,
       name: c.name,
       nameKo: c.nameKo,
-      evidence,
-      grounded: groundedShare(evidence, response),
+      // Unlocatable quotes are dropped from what the student sees.
+      evidence: snaps.filter((x) => x.found).map((x) => x.text),
+      grounded: groundedShare(quotes, response),
+      groundedAfterSnap: quotes.length ? snaps.filter((x) => x.found).length / quotes.length : 0,
       comment: String(item.comment ?? ""),
       score,
     };
@@ -376,9 +389,36 @@ export function parseEvaluation(
       quote: String(e.quote ?? ""),
       correction: String(e.correction ?? ""),
     }))
-    // Drop no-op "corrections" (model sometimes repeats the original).
-    .filter((e) => e.quote && normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "))
-    .map((e) => ({ ...e, grounded: occursIn(e.quote, response) }));
+    .filter((e) => e.quote)
+    // Snap BEFORE judging no-ops: models often quote the corrected form ("students are
+    // understanding" → itself); snapping recovers the real error ("students is understanding").
+    .map((e): LanguageError => {
+      const snap = snapQuote(e.quote, response);
+      return {
+        ...e,
+        quote: snap.found ? snap.text : e.quote,
+        grounded: occursIn(e.quote, response),
+        located: snap.found,
+        source: "llm",
+      };
+    })
+    // After snapping, a "correction" equal to the original text is not a correction.
+    .filter((e) => normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "))
+    // The same span listed twice (3B did "hard → harder" ×3).
+    .filter((e, i, all) => all.findIndex((x) => normalizeWords(x.quote).join(" ") === normalizeWords(e.quote).join(" ")) === i);
+
+  // Hybrid: deterministic rules (v2+) for what the LLM reliably misses.
+  if (meta.version !== "v1") {
+    for (const r of detectRuleIssues(response)) {
+      const rq = normalizeWords(r.quote).join(" ");
+      // Prefer the rule's exact span over an overlapping LLM item.
+      for (let i = errors.length - 1; i >= 0; i--) {
+        const lq = normalizeWords(errors[i].quote).join(" ");
+        if (lq.includes(rq) || rq.includes(lq)) errors.splice(i, 1);
+      }
+      errors.push({ kind: r.kind, quote: r.quote, correction: r.correction, grounded: true, located: true, source: "rule" });
+    }
+  }
   const a = data.analysis as { main_point?: unknown; support_given?: unknown; not_addressed?: unknown } | undefined;
   const analysis: ResponseAnalysis | null = a
     ? {
@@ -500,9 +540,12 @@ export async function evaluateResponse(
   opts: { modelId: string; lang?: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; samples?: number },
 ): Promise<LlmEvaluation> {
   const n = Math.max(1, opts.samples ?? 3);
-  const runs: LlmEvaluation[] = [];
-  for (let i = 0; i < n; i++) runs.push(await evaluateOnce(task, response, opts));
-  let result = combineSamples(runs);
+  // Start (or reuse) the server ONCE, then send all samples concurrently: llama-server runs
+  // them in parallel slots (--parallel 3), which on a GPU costs far less than 3× one run.
+  await api.llmStart(opts.modelId);
+  const wall0 = performance.now();
+  const runs = await Promise.all(Array.from({ length: n }, () => evaluateOnce(task, response, opts)));
+  let result = { ...combineSamples(runs), latencyMs: Math.round(performance.now() - wall0) };
   if ((opts.version ?? DEFAULT_PROMPT_VERSION) !== "v1" && (opts.lang ?? "ko") === "ko") {
     const t0 = performance.now();
     result = await translateToKorean(result);

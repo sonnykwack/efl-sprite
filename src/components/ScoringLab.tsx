@@ -51,9 +51,15 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
   const [runs, setRuns] = useState<LlmEvaluation[]>([]);
   const [final, setFinal] = useState<LlmEvaluation | null>(null);
   const [lang, setLang] = useState<FeedbackLang>("ko");
-  const [version, setVersion] = useState<PromptVersion>("v3");
+  const [versionPick, setVersionPick] = useState<PromptVersion | "auto">("auto");
   const [pickedLlm, setPickedLlm] = useState<string>("");
-  const llmId = pickedLlm && llms.some((m) => m.id === pickedLlm) ? pickedLlm : llms[0]?.id;
+  const [wallMs, setWallMs] = useState<number | null>(null);
+  const llm =
+    llms.find((m) => m.id === pickedLlm) ?? llms.find((m) => m.recommended) ?? llms[0];
+  const llmId = llm?.id;
+  // "auto" = the prompt version measured to work best with the chosen model (catalog).
+  const version: PromptVersion =
+    versionPick === "auto" ? ((llm?.prompt as PromptVersion | undefined) ?? "v3") : versionPick;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [repeat, setRepeat] = useState<RepeatResult | null>(null);
@@ -63,14 +69,18 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
     if (!llmId) return setError("설치된 LLM 모델이 없습니다.");
     setRuns([]);
     setFinal(null);
+    setWallMs(null);
     setError(null);
     try {
-      const out: LlmEvaluation[] = [];
-      for (let i = 0; i < n; i++) {
-        setBusy(`채점 ${i + 1}/${n}…`);
-        out.push(await evaluateOnce(SAMPLE_TASK, SAMPLE_RESPONSE, { modelId: llmId, lang, version }));
-        setRuns([...out]);
-      }
+      setBusy("모델 준비 중…");
+      await api.llmStart(llmId);
+      // Same as production: all samples sent at once → llama-server parallel slots.
+      setBusy(`채점 ${n}회 동시 실행 중…`);
+      const wall0 = performance.now();
+      const out = await Promise.all(
+        Array.from({ length: n }, () => evaluateOnce(SAMPLE_TASK, SAMPLE_RESPONSE, { modelId: llmId, lang, version })),
+      );
+      setRuns(out);
       // What the app will actually show: median of the samples (+ Korean translation in v2).
       let combined = combineSamples(out);
       if (version !== "v1" && lang === "ko") {
@@ -79,6 +89,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
         combined = await translateToKorean(combined);
         combined = { ...combined, latencyMs: combined.latencyMs + Math.round(performance.now() - t0) };
       }
+      setWallMs(Math.round(performance.now() - wall0));
       setFinal(combined);
     } catch (e) {
       setError(String(e));
@@ -136,10 +147,11 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
         <label className="flex items-center gap-2 text-xs text-ink-600">
           프롬프트
           <select
-            value={version}
-            onChange={(e) => setVersion(e.target.value as PromptVersion)}
+            value={versionPick}
+            onChange={(e) => setVersionPick(e.target.value as PromptVersion | "auto")}
             className="rounded border border-black/10 px-2 py-1"
           >
+            <option value="auto">자동 (모델 권장: {llm?.prompt ?? "v3"})</option>
             <option value="v3">v3 (분석 후 채점)</option>
             <option value="v2">v2</option>
             <option value="v1">v1 (초기)</option>
@@ -176,7 +188,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
                 <th>합계</th>
                 <th>밴드</th>
                 <th>교정 수</th>
-                <th>근거 실재율</th>
+                <th title="모델 인용이 답안과 정확히 일치한 비율 → 원문 보정 후 비율">근거 실재율 (원문→보정)</th>
                 <th>시간</th>
               </tr>
             </thead>
@@ -192,7 +204,10 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
                   </td>
                   <td>{r.band.toFixed(1)}</td>
                   <td>{r.errors.length}</td>
-                  <td>{Math.round(mean(r.criteria.map((c) => c.grounded)) * 100)}%</td>
+                  <td>
+                    {Math.round(mean(r.criteria.map((c) => c.grounded)) * 100)}% →{" "}
+                    {Math.round(mean(r.criteria.map((c) => c.groundedAfterSnap)) * 100)}%
+                  </td>
                   <td>{(r.latencyMs / 1000).toFixed(1)}s</td>
                 </tr>
               ))}
@@ -212,8 +227,11 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
                   </td>
                   <td>{mean(runs.map((r) => r.band)).toFixed(2)}</td>
                   <td>{mean(runs.map((r) => r.errors.length)).toFixed(1)}</td>
-                  <td>{Math.round(mean(runs.flatMap((r) => r.criteria.map((c) => c.grounded))) * 100)}%</td>
-                  <td>{(mean(runs.map((r) => r.latencyMs)) / 1000).toFixed(1)}s</td>
+                  <td>
+                    {Math.round(mean(runs.flatMap((r) => r.criteria.map((c) => c.grounded))) * 100)}% →{" "}
+                    {Math.round(mean(runs.flatMap((r) => r.criteria.map((c) => c.groundedAfterSnap))) * 100)}%
+                  </td>
+                  <td>{wallMs != null ? `${(wallMs / 1000).toFixed(1)}s (병렬)` : "—"}</td>
                 </tr>
               )}
             </tbody>
@@ -224,7 +242,9 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
       {shown && (
         <details className="mb-4 rounded-lg bg-sprite-50 p-3 text-xs" open>
           <summary className="cursor-pointer font-semibold text-ink-600">
-            {final ? `최종 결과 (중앙값 ${final.samples}회 · 밴드 ${final.band.toFixed(1)} · 총 ${(final.latencyMs / 1000).toFixed(1)}s)` : "1회차 상세 피드백"}
+            {final
+              ? `최종 결과 (${version} · 중앙값 ${final.samples}회 · 밴드 ${final.band.toFixed(1)} · 번역 포함 총 ${((wallMs ?? final.latencyMs) / 1000).toFixed(1)}s)`
+              : "1회차 상세 피드백"}
           </summary>
           <div className="mt-2 grid gap-3" data-selectable>
             {shown.analysis && (
@@ -244,10 +264,15 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
                 <div className="font-semibold">문법 · 어휘 교정</div>
                 <ul className="ml-4 list-disc text-ink-600">
                   {shown.errors.map((e, i) => (
-                    <li key={i} className={e.grounded ? "" : "text-red-600"}>
+                    <li key={i} className={e.located ? "" : "text-red-600"}>
                       <span className="mr-1 rounded bg-white px-1 text-[10px] text-ink-400">{KIND_KO[e.kind]}</span>
+                      {e.source === "rule" && (
+                        <span className="mr-1 rounded bg-sky-100 px-1 text-[10px] text-sky-700" title="규칙 기반 검사">
+                          규칙
+                        </span>
+                      )}
                       <span className="line-through">{e.quote}</span> → <span className="font-semibold text-sprite-700">{e.correction}</span>
-                      {!e.grounded && " (답안에 없는 인용)"}
+                      {!e.located && " (답안에서 찾을 수 없음)"}
                     </li>
                   ))}
                 </ul>

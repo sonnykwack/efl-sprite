@@ -29,6 +29,8 @@ export interface ModelEntry {
   minVramGb: number;
   recommended: boolean;
   notes: string;
+  /** LLM only: scoring prompt version recommended for this model ("v2" | "v3"). */
+  prompt?: string;
   installed: boolean;
 }
 

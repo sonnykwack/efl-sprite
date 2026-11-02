@@ -27,6 +27,9 @@ pub struct CatalogEntry {
     pub min_vram_gb: u32,
     pub recommended: bool,
     pub notes: String,
+    /// LLM only: scoring prompt version measured to work best with this model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
