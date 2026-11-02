@@ -104,7 +104,10 @@ async function findFile(dir, name) {
 /** Copy the directory that contains `binary` (binary + its sibling libs) into `dest`. */
 async function installDirOf(binary, dest) {
   await rm(dest, { recursive: true, force: true });
-  await cp(dirname(binary), dest, { recursive: true });
+  // dereference: release archives ship libs as symlinks (libggml-rpc.0.dylib → …).
+  // Copying links would leave them pointing into WORK, which is deleted afterwards,
+  // and Tauri's bundler then fails with "resource path … doesn't exist".
+  await cp(dirname(binary), dest, { recursive: true, dereference: true });
   if (OS !== "windows") {
     for (const f of await readdir(dest)) {
       const p = join(dest, f);
@@ -216,9 +219,16 @@ async function main() {
   log(`target: ${OS}/${ARCH} → ${OUT}`);
   await mkdir(WORK, { recursive: true });
   await mkdir(OUT, { recursive: true });
+  let llama, whisper;
   try {
-    const llama = await fetchLlama();
-    const whisper = await fetchWhisper();
+    llama = await fetchLlama();
+    whisper = await fetchWhisper();
+  } finally {
+    await rm(WORK, { recursive: true, force: true });
+  }
+  // Verify AFTER the temp dir is gone, so anything still pointing into it fails here
+  // instead of later in `tauri dev`.
+  {
     smoke(join(OUT, "llama", `llama-server${EXE}`), ["--version"]);
     smoke(join(OUT, "whisper", `whisper-cli${EXE}`), ["--help"]);
     if (!existsSync(join(OUT, "samples", "jfk.wav"))) throw new Error("samples/jfk.wav missing");
@@ -227,8 +237,6 @@ async function main() {
       JSON.stringify({ os: OS, arch: ARCH, llama, whisper, fetchedAt: new Date().toISOString() }, null, 2) + "\n",
     );
     log("done", JSON.stringify({ llama, whisper }));
-  } finally {
-    await rm(WORK, { recursive: true, force: true });
   }
 }
 
