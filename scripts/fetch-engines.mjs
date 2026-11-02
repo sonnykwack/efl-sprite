@@ -52,6 +52,20 @@ async function gh(path) {
 const release = (repo, tag) =>
   gh(`repos/${repo}/releases/${tag ? `tags/${tag}` : "latest"}`);
 
+/**
+ * Release that actually carries a binary matching `patterns`.
+ * Needed because llama.cpp (since v0.8.0, Oct 2026) publishes version tags like
+ * `v0.8.0` with no binaries; the binaries live on build tags like `b11960`.
+ * With an explicit tag we use it as-is; otherwise scan recent releases newest-first.
+ */
+async function releaseWithAsset(repo, tag, patterns) {
+  if (tag) return release(repo, tag);
+  const list = await gh(`repos/${repo}/releases?per_page=30`);
+  const hit = list.find((r) => !r.draft && r.assets.some((a) => patterns.some((re) => re.test(a.name))));
+  if (!hit) throw new Error(`no recent ${repo} release has an asset matching ${patterns.join(" | ")}`);
+  return hit;
+}
+
 async function download(url, dest) {
   log("download", url);
   const r = await fetch(url, { headers: { "User-Agent": "efl-sprite-fetch" } });
@@ -111,8 +125,12 @@ function pickAsset(rel, patterns) {
 }
 
 // ---------------------------------------------------------------- llama.cpp
+// Pinned so macOS, Windows and CI all bundle the same engine build.
+// Bump deliberately (check the release has bin-macos-arm64 + bin-win-vulkan-x64 assets),
+// or run with LLAMA_TAG=latest to pick the newest build that has binaries.
+const LLAMA_DEFAULT_TAG = "b11960";
+
 async function fetchLlama() {
-  const rel = await release("ggml-org/llama.cpp", process.env.LLAMA_TAG);
   const ext = /\.(zip|tar\.gz)$/;
   const patterns = {
     macos: [new RegExp(`bin-macos-${ARCH}` + ext.source)],
@@ -120,6 +138,8 @@ async function fetchLlama() {
     windows: [new RegExp("bin-win-vulkan-x64" + ext.source), new RegExp("bin-win-cpu-x64" + ext.source)],
     linux: [new RegExp("bin-ubuntu-x64" + ext.source)],
   }[OS];
+  const envTag = process.env.LLAMA_TAG ?? LLAMA_DEFAULT_TAG;
+  const rel = await releaseWithAsset("ggml-org/llama.cpp", envTag === "latest" ? undefined : envTag, patterns);
   const asset = pickAsset(rel, patterns);
   const archive = join(WORK, asset.name);
   await download(asset.browser_download_url, archive);
@@ -134,13 +154,17 @@ async function fetchLlama() {
 
 // -------------------------------------------------------------- whisper.cpp
 async function fetchWhisper() {
-  const rel = await release("ggml-org/whisper.cpp", process.env.WHISPER_TAG);
-  const tag = rel.tag_name;
   const useSource = OS !== "windows" || process.env.WHISPER_VULKAN === "1";
+  const winPatterns = [/^whisper-bin-x64\.zip$/];
+  // Source builds only need a tag; the Windows prebuilt needs a release that has the zip.
+  const rel = useSource
+    ? await release("ggml-org/whisper.cpp", process.env.WHISPER_TAG)
+    : await releaseWithAsset("ggml-org/whisper.cpp", process.env.WHISPER_TAG, winPatterns);
+  const tag = rel.tag_name;
 
   if (!useSource) {
     // Windows prebuilt (CPU). small.en on a modern CPU transcribes 45 s of speech in a few seconds.
-    const asset = pickAsset(rel, [/^whisper-bin-x64\.zip$/]);
+    const asset = pickAsset(rel, winPatterns);
     const archive = join(WORK, asset.name);
     await download(asset.browser_download_url, archive);
     const dir = join(WORK, "whisper");
