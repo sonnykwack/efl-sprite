@@ -14,6 +14,13 @@
 //  v2 — (a) model first lists concrete language errors with corrections, (b) reasons and
 //       writes in English, Korean comes from a separate translation call, (c) full 0–5
 //       scale meanings + calibration note, "strict" removed.
+//       Measured (3B, AD sample): band 3.5–3.67 ✓, real errors flagged ✓, but Support scored
+//       1 despite a concrete personal example, comments copied rubric anchor text, and
+//       quotes were taken from the classmates' posts instead of the student's response.
+//  v3 — read first, judge second: the model fills `analysis` (main point, the reasons and
+//       examples the student actually gives, what is missing) BEFORE any score; student
+//       response and classmates' posts are wrapped in explicit tags; comments must name
+//       response content and never copy rubric wording.
 //  evaluateResponse() can additionally take the per-criterion MEDIAN of several samples.
 
 import { api } from "./api";
@@ -52,10 +59,18 @@ export interface LanguageError {
   grounded: boolean;
 }
 
+export interface ResponseAnalysis {
+  mainPoint: string;
+  supportGiven: string[];
+  notAddressed: string;
+}
+
 export interface LlmEvaluation {
   version: PromptVersion;
   criteria: CriterionResult[];
   errors: LanguageError[];
+  /** v3 only: what the model read in the response before judging it. */
+  analysis: ResponseAnalysis | null;
   overallFeedback: string;
   total: number;
   max: number;
@@ -69,8 +84,8 @@ export interface LlmEvaluation {
 }
 
 export type FeedbackLang = "ko" | "en";
-export type PromptVersion = "v1" | "v2";
-export const DEFAULT_PROMPT_VERSION: PromptVersion = "v2";
+export type PromptVersion = "v1" | "v2" | "v3";
+export const DEFAULT_PROMPT_VERSION: PromptVersion = "v3";
 
 const FILLERS = new Set(["um", "uh", "erm", "er", "hmm", "uhm", "ah"]);
 
@@ -105,7 +120,7 @@ function criterionSchema(maxComment: number) {
 /** JSON schema whose key order fixes the generation order (serde_json preserve_order). */
 export function evaluationSchema(criteria: Criterion[], version: PromptVersion = DEFAULT_PROMPT_VERSION) {
   const properties: Record<string, unknown> = {};
-  if (version === "v2") {
+  if (version !== "v1") {
     // Errors come FIRST so the language score is anchored to concrete mistakes.
     properties.errors = {
       type: "array",
@@ -122,12 +137,26 @@ export function evaluationSchema(criteria: Criterion[], version: PromptVersion =
       maxItems: 6,
     };
   }
-  for (const c of criteria) properties[c.key] = criterionSchema(version === "v2" ? 260 : 320);
-  properties.overall_feedback = { type: "string", maxLength: version === "v2" ? 400 : 600 };
+  if (version === "v3") {
+    // Comprehension before judgment: what does the response actually say?
+    properties.analysis = {
+      type: "object",
+      properties: {
+        main_point: { type: "string", maxLength: 200 },
+        support_given: { type: "array", items: { type: "string", maxLength: 200 }, minItems: 0, maxItems: 4 },
+        not_addressed: { type: "string", maxLength: 200 },
+      },
+      required: ["main_point", "support_given", "not_addressed"],
+      additionalProperties: false,
+    };
+  }
+  for (const c of criteria) properties[c.key] = criterionSchema(version === "v1" ? 320 : 260);
+  properties.overall_feedback = { type: "string", maxLength: version === "v1" ? 600 : 400 };
+  const head = version === "v1" ? [] : version === "v2" ? ["errors"] : ["errors", "analysis"];
   return {
     type: "object",
     properties,
-    required: [...(version === "v2" ? ["errors"] : []), ...criteria.map((c) => c.key), "overall_feedback"],
+    required: [...head, ...criteria.map((c) => c.key), "overall_feedback"],
     additionalProperties: false,
   };
 }
@@ -152,6 +181,31 @@ const SCALE_V2 = [
   "Calibration: most intermediate learners score 2–4. Give 1 only when the response is very short, mostly off-task, or hard to understand.",
   "Grammar mistakes alone do not lower Contribution or Support scores — judge each criterion separately.",
 ].join("\n");
+
+/** v3: every block is wrapped in a tag so the model cannot mix up who wrote what. */
+function taskTextTagged(task: ScorableTask, response: string, stats?: SpeakingStats): string {
+  const spec = TASK_SPECS[task.taskType];
+  const parts = [`<task type="${spec.label}">`, task.prompt.trim(), "</task>"];
+  if (task.material?.trim()) {
+    parts.push(
+      "",
+      "<classmates_posts>  (written by OTHER students — never quote or score these)",
+      task.material.trim(),
+      "</classmates_posts>",
+    );
+  }
+  if (stats) {
+    parts.push(
+      "",
+      "<speech_statistics>",
+      `duration: ${stats.durationSeconds.toFixed(0)} s · words: ${stats.words} · words per minute: ${stats.wordsPerMinute} · filler words: ${stats.fillers}`,
+      "The student response is an automatic transcript: judge delivery from these numbers and from hesitations or fragments in it; ignore its spelling and punctuation.",
+      "</speech_statistics>",
+    );
+  }
+  parts.push("", "<student_response>", response.trim() || "(no response)", "</student_response>");
+  return parts.join("\n");
+}
 
 function taskText(task: ScorableTask, response: string, stats?: SpeakingStats): string {
   const spec = TASK_SPECS[task.taskType];
@@ -198,6 +252,33 @@ export function buildEvaluationMessages(
     return [
       { role: "system", content: system },
       { role: "user", content: taskText(task, response, opts.stats) },
+    ];
+  }
+
+  if (version === "v3") {
+    const system = [
+      `You are an experienced, fair rater of English ${spec.section} responses for TOEFL iBT-style practice (task: ${spec.label}).`,
+      "Only the text inside <student_response> is the student's work. Quote ONLY from it.",
+      "Work in this order:",
+      "1. errors: up to 6 real grammar or word-choice errors. `quote` = exact words from <student_response> (2–8 words), `correction` = corrected words. Never list correct text.",
+      "2. analysis — read before you judge:",
+      "   main_point: the student's position or purpose in one sentence.",
+      "   support_given: each reason or example the student actually gives (one short line each). A personal story with details (a class, a time, what happened) IS a specific example.",
+      "   not_addressed: what the task asks for that the response misses, or ideas it only repeats from <classmates_posts>. Write 'nothing important' if fully covered.",
+      `3. For each criterion: evidence (1–3 phrases copied exactly from <student_response>), comment, score (integer 0–${SCALE_MAX}).`,
+      "   The comment must mention specific content from THIS response (use your analysis) and say how to improve. Never copy wording from the rubric.",
+      "   The score must agree with your analysis: if support_given lists a specific example, Support cannot be below 3.",
+      "4. overall_feedback: the main strength, then the single most useful thing to work on (two or three sentences).",
+      "Address the student as 'you'. Write in clear, simple English.",
+      "",
+      SCALE_V2,
+      "",
+      "## Rubric",
+      rubricText(spec.criteria),
+    ].join("\n");
+    return [
+      { role: "system", content: system },
+      { role: "user", content: taskTextTagged(task, response, opts.stats) },
     ];
   }
 
@@ -268,11 +349,20 @@ export function parseEvaluation(
     // Drop no-op "corrections" (model sometimes repeats the original).
     .filter((e) => e.quote && normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "))
     .map((e) => ({ ...e, grounded: occursIn(e.quote, response) }));
+  const a = data.analysis as { main_point?: unknown; support_given?: unknown; not_addressed?: unknown } | undefined;
+  const analysis: ResponseAnalysis | null = a
+    ? {
+        mainPoint: String(a.main_point ?? ""),
+        supportGiven: Array.isArray(a.support_given) ? a.support_given.map(String) : [],
+        notAddressed: String(a.not_addressed ?? ""),
+      }
+    : null;
   return finalize(
     {
       version: meta.version,
       criteria,
       errors,
+      analysis,
       overallFeedback: String(data.overall_feedback ?? ""),
       latencyMs: meta.latencyMs,
       modelId: meta.modelId,
@@ -324,7 +414,8 @@ export async function translateToKorean(e: LlmEvaluation): Promise<LlmEvaluation
       {
         role: "system",
         content:
-          "Translate each English feedback sentence for a Korean student into natural, polite Korean (해요체). " +
+          "Translate each English feedback text for a Korean high-school or university student into natural, polite Korean (해요체). " +
+          "Translate the meaning, not word by word (e.g. 'drifts off topic' → '주제에서 벗어나요', 'add a new idea' → '새로운 의견을 더하다'). " +
           "Keep quoted English words and corrections in English inside quotation marks. Return the translations in the same order.",
       },
       { role: "user", content: JSON.stringify(texts) },
@@ -382,7 +473,7 @@ export async function evaluateResponse(
   const runs: LlmEvaluation[] = [];
   for (let i = 0; i < n; i++) runs.push(await evaluateOnce(task, response, opts));
   let result = combineSamples(runs);
-  if ((opts.version ?? DEFAULT_PROMPT_VERSION) === "v2" && (opts.lang ?? "ko") === "ko") {
+  if ((opts.version ?? DEFAULT_PROMPT_VERSION) !== "v1" && (opts.lang ?? "ko") === "ko") {
     const t0 = performance.now();
     result = await translateToKorean(result);
     result = { ...result, latencyMs: result.latencyMs + Math.round(performance.now() - t0) };

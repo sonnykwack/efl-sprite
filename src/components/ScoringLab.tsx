@@ -49,7 +49,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
   const [runs, setRuns] = useState<LlmEvaluation[]>([]);
   const [final, setFinal] = useState<LlmEvaluation | null>(null);
   const [lang, setLang] = useState<FeedbackLang>("ko");
-  const [version, setVersion] = useState<PromptVersion>("v2");
+  const [version, setVersion] = useState<PromptVersion>("v3");
   const [pickedLlm, setPickedLlm] = useState<string>("");
   const llmId = pickedLlm && llms.some((m) => m.id === pickedLlm) ? pickedLlm : llms[0]?.id;
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
       }
       // What the app will actually show: median of the samples (+ Korean translation in v2).
       let combined = combineSamples(out);
-      if (version === "v2" && lang === "ko") {
+      if (version !== "v1" && lang === "ko") {
         setBusy("한국어 번역 중…");
         const t0 = performance.now();
         combined = await translateToKorean(combined);
@@ -138,7 +138,8 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
             onChange={(e) => setVersion(e.target.value as PromptVersion)}
             className="rounded border border-black/10 px-2 py-1"
           >
-            <option value="v2">v2 (개선)</option>
+            <option value="v3">v3 (분석 후 채점)</option>
+            <option value="v2">v2</option>
             <option value="v1">v1 (초기)</option>
           </select>
         </label>
@@ -224,6 +225,18 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
             {final ? `최종 결과 (중앙값 ${final.samples}회 · 밴드 ${final.band.toFixed(1)} · 총 ${(final.latencyMs / 1000).toFixed(1)}s)` : "1회차 상세 피드백"}
           </summary>
           <div className="mt-2 grid gap-3" data-selectable>
+            {shown.analysis && (
+              <div className="rounded bg-white/60 p-2">
+                <div className="font-semibold">AI가 읽은 내용 (분석)</div>
+                <div>주장: {shown.analysis.mainPoint}</div>
+                <ul className="ml-4 list-disc text-ink-600">
+                  {shown.analysis.supportGiven.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+                <div>부족한 점: {shown.analysis.notAddressed}</div>
+              </div>
+            )}
             {shown.errors.length > 0 && (
               <div>
                 <div className="font-semibold">문법 · 어휘 교정</div>

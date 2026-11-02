@@ -56,7 +56,11 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
 - Prompt versions live side by side (`PromptVersion`). v1 (strict, Korean written directly) was
   measured on Qwen2.5-3B: SD 0.94, band 2.0–2.5 for an intermediate sample, generic/wrong
   comments, real errors never flagged. v2 = errors list first, English reasoning, separate
-  Korean translation call, full 0–5 scale + calibration note. Keep v1 for the report comparison.
+  Korean translation call, full 0–5 scale + calibration note. v2 measured: band 3.5–3.67 (right
+  level), real errors flagged, but Support=1 despite a concrete example, anchor text copied into
+  comments, quotes taken from classmates' posts. v3 (default) = `analysis` (main point, support
+  given, not addressed) BEFORE scores + tagged blocks (<student_response>, <classmates_posts>).
+  Keep v1/v2 for the report comparison.
 - Production scoring = `evaluateResponse(..., samples: 3)` → per-criterion median (`combineSamples`).
 - Feedback language: Korean by default (`lang: "ko"`), evidence stays verbatim English.
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
