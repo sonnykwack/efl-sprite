@@ -139,7 +139,8 @@ pub async fn llm_chat(
     let mut body = json!({
         "messages": messages,
         "temperature": 0.2,
-        "max_tokens": 1500,
+        // Korean feedback costs ~2× the tokens of English; 3 criteria + summary fit in 3000.
+        "max_tokens": 3000,
     });
     if let Some(schema) = json_schema {
         body["response_format"] = json!({

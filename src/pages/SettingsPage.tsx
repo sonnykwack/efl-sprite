@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader";
+import ScoringLab from "../components/ScoringLab";
 import { api, inTauri } from "../lib/api";
 import type { AppInfo, DownloadProgress, ModelEntry } from "../lib/types";
 
@@ -164,6 +165,8 @@ export default function SettingsPage() {
           </ul>
         </section>
       ))}
+
+      <ScoringLab llmId={firstInstalled("llm")?.id} whisperId={firstInstalled("whisper")?.id} />
 
       <section className="rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-ink-600">엔진 연결 테스트</h2>

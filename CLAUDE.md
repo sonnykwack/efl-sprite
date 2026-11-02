@@ -41,11 +41,21 @@ Developed on macOS, shipped on Windows. Capstone deadline: **2026-11-17**.
 - `cd src-tauri && cargo check` — fast Rust check · `npx tauri build` — full bundle
 
 ## Scoring design (core of the project)
-- LLM output is grammar-constrained with a JSON schema (`llm_chat(messages, jsonSchema)` →
-  llama-server `response_format: json_schema`).
-- Per rubric criterion: quote evidence from the response FIRST, then score (0–4). Never ask for
-  a bare score — variance is much higher.
+Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `email`,
+`academic_discussion` (writing). Specs + rubrics: `src/lib/rubrics.ts`.
+- `listen_repeat`: NO LLM. Whisper transcript vs target sentence, word-level Levenshtein
+  (`src/lib/accuracy.ts`) → accuracy %.
+- Others: `src/lib/scoring.ts`. 3 analytic criteria, each 0–5, output grammar-constrained by a
+  JSON schema (`llm_chat(messages, jsonSchema)` → llama-server `response_format: json_schema`).
+- Per criterion the schema order is `evidence` → `comment` → `score`: quote FIRST, then score.
+  Never ask for a bare score. Key order survives because serde_json has `preserve_order` — keep it.
+- Evidence quotes are checked against the response (`groundedShare`) to detect invented quotes.
+- Speaking: fluency proxies (WPM, fillers) are computed and given to the LLM; pronunciation is
+  not assessed by the LLM (documented limitation).
+- Band = linear map of total/max onto 1.0–6.0 (0.5 steps). Always labelled an estimate, not ETS.
+- Feedback language: Korean by default (`lang: "ko"`), evidence stays verbatim English.
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
+- Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.
 
 ## Plan (2026-11)
 | Day | Date | Milestone |

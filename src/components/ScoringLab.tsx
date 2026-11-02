@@ -1,0 +1,222 @@
+// Settings → 채점 실험실. Measures what the report needs:
+//  - consistency: same response scored N times → per-criterion mean / SD
+//  - grounding:   share of evidence quotes that really occur in the response
+//  - latency
+//  - Listen and Repeat accuracy on the bundled JFK sample
+import { useState } from "react";
+import { api } from "../lib/api";
+import { scoreRepeat, type RepeatResult } from "../lib/accuracy";
+import { TASK_SPECS } from "../lib/rubrics";
+import { evaluateResponse, type FeedbackLang, type LlmEvaluation, type ScorableTask } from "../lib/scoring";
+
+const SAMPLE_TASK: ScorableTask = {
+  taskType: "academic_discussion",
+  prompt:
+    "Many universities now offer courses entirely online. Do you think online courses are as effective as traditional classroom courses? Why or why not?",
+  material:
+    "Kelly: I think online courses can be just as effective. Students can watch lectures again whenever they want, so they understand difficult concepts better.\n" +
+    "Paul: I disagree. In a classroom, students can ask questions immediately and learn from discussions with classmates. Online, it is easy to get distracted.",
+};
+
+// Deliberately intermediate (≈ band 3.5–4): clear position and a personal example,
+// but agreement/article errors and some overlap with Paul's post.
+const SAMPLE_RESPONSE =
+  "I agree with Paul that online course is not effective as classroom course. Because in classroom, the professor can check if students is understanding and change the way of teaching. " +
+  "For example, when I took a statistics class last semester, my professor noticed that many of us was confused about the probability, so she explained it again with more easy examples. " +
+  "This kind of thing is very hard in online class because professor cannot see students face. Also, I think students need some pressure to study hard. " +
+  "If you are at home, you can easily watch YouTube instead of lecture. However, online courses can be good for working people who don't have time. " +
+  "But for university students, I believe classroom is better choice.";
+
+const JFK_TARGET =
+  "And so, my fellow Americans, ask not what your country can do for you; ask what you can do for your country.";
+
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(xs.length, 1);
+const sd = (xs: number[]) => {
+  const m = mean(xs);
+  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)));
+};
+
+export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisperId?: string }) {
+  const [runs, setRuns] = useState<LlmEvaluation[]>([]);
+  const [lang, setLang] = useState<FeedbackLang>("ko");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [repeat, setRepeat] = useState<RepeatResult | null>(null);
+  const criteria = TASK_SPECS.academic_discussion.criteria;
+
+  const runConsistency = async (n: number) => {
+    if (!llmId) return setError("설치된 LLM 모델이 없습니다.");
+    setRuns([]);
+    setError(null);
+    try {
+      const out: LlmEvaluation[] = [];
+      for (let i = 0; i < n; i++) {
+        setBusy(`채점 ${i + 1}/${n}…`);
+        out.push(await evaluateResponse(SAMPLE_TASK, SAMPLE_RESPONSE, { modelId: llmId, lang }));
+        setRuns([...out]);
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runRepeat = async () => {
+    if (!whisperId) return setError("설치된 Whisper 모델이 없습니다.");
+    setError(null);
+    setBusy("전사 중…");
+    try {
+      const transcript = await api.transcribe("__sample__", whisperId);
+      setRepeat(scoreRepeat(JFK_TARGET, transcript));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const btn =
+    "rounded-lg border border-sprite-500 px-3 py-1.5 text-sm text-sprite-700 hover:bg-sprite-50 disabled:opacity-40";
+  const first = runs[0];
+
+  return (
+    <section className="mb-6 rounded-xl bg-white p-5 shadow-sm">
+      <h2 className="mb-1 text-sm font-semibold text-ink-600">채점 실험실</h2>
+      <p className="mb-4 text-xs text-ink-400">
+        같은 답안을 여러 번 채점해 점수 흔들림(표준편차), 근거 인용의 실제 존재 비율, 소요 시간을 측정합니다.
+      </p>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <button disabled={!!busy} onClick={() => runConsistency(3)} className={btn}>
+          Academic Discussion 샘플 3회 채점
+        </button>
+        <button disabled={!!busy} onClick={runRepeat} className={btn}>
+          Listen &amp; Repeat 정확도 (JFK 샘플)
+        </button>
+        <label className="ml-auto flex items-center gap-2 text-xs text-ink-600">
+          피드백 언어
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value as FeedbackLang)}
+            className="rounded border border-black/10 px-2 py-1"
+          >
+            <option value="ko">한국어</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+      </div>
+      {busy && <p className="mb-2 text-xs text-sprite-700">{busy}</p>}
+      {error && (
+        <pre className="mb-2 whitespace-pre-wrap text-xs text-red-600" data-selectable>
+          {error}
+        </pre>
+      )}
+
+      {runs.length > 0 && (
+        <div className="mb-4 overflow-x-auto">
+          <table className="w-full text-right text-xs" data-selectable>
+            <thead className="text-ink-400">
+              <tr>
+                <th className="py-1 text-left">회차</th>
+                {criteria.map((c) => (
+                  <th key={c.key}>{c.nameKo}</th>
+                ))}
+                <th>합계</th>
+                <th>밴드</th>
+                <th>근거 실재율</th>
+                <th>시간</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((r, i) => (
+                <tr key={i} className="border-t border-black/5">
+                  <td className="py-1 text-left">#{i + 1}</td>
+                  {r.criteria.map((c) => (
+                    <td key={c.key}>{c.score}</td>
+                  ))}
+                  <td>
+                    {r.total}/{r.max}
+                  </td>
+                  <td>{r.band.toFixed(1)}</td>
+                  <td>{Math.round(mean(r.criteria.map((c) => c.grounded)) * 100)}%</td>
+                  <td>{(r.latencyMs / 1000).toFixed(1)}s</td>
+                </tr>
+              ))}
+              {runs.length > 1 && (
+                <tr className="border-t border-black/20 font-semibold">
+                  <td className="py-1 text-left">평균 ± SD</td>
+                  {criteria.map((c, k) => {
+                    const xs = runs.map((r) => r.criteria[k].score);
+                    return (
+                      <td key={c.key}>
+                        {mean(xs).toFixed(2)} ± {sd(xs).toFixed(2)}
+                      </td>
+                    );
+                  })}
+                  <td>
+                    {mean(runs.map((r) => r.total)).toFixed(2)} ± {sd(runs.map((r) => r.total)).toFixed(2)}
+                  </td>
+                  <td>{mean(runs.map((r) => r.band)).toFixed(2)}</td>
+                  <td>{Math.round(mean(runs.flatMap((r) => r.criteria.map((c) => c.grounded))) * 100)}%</td>
+                  <td>{(mean(runs.map((r) => r.latencyMs)) / 1000).toFixed(1)}s</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {first && (
+        <details className="mb-4 rounded-lg bg-sprite-50 p-3 text-xs" open>
+          <summary className="cursor-pointer font-semibold text-ink-600">1회차 상세 피드백</summary>
+          <div className="mt-2 grid gap-3" data-selectable>
+            {first.criteria.map((c) => (
+              <div key={c.key}>
+                <div className="font-semibold">
+                  {c.nameKo} ({c.name}) — {c.score}/5
+                </div>
+                <ul className="ml-4 list-disc text-ink-600">
+                  {c.evidence.map((q, i) => (
+                    <li key={i}>“{q}”</li>
+                  ))}
+                </ul>
+                <div>{c.comment}</div>
+              </div>
+            ))}
+            <div className="border-t border-black/10 pt-2">
+              <span className="font-semibold">총평 </span>
+              {first.overallFeedback}
+            </div>
+          </div>
+        </details>
+      )}
+
+      {repeat && (
+        <div className="rounded-lg bg-sprite-50 p-3 text-xs" data-selectable>
+          <div className="mb-1 font-semibold">정확도 {Math.round(repeat.accuracy * 100)}%</div>
+          <div className="mb-2 leading-6">
+            {repeat.ops.map((o, i) =>
+              o.op === "ok" ? (
+                <span key={i}>{o.ref} </span>
+              ) : o.op === "sub" ? (
+                <span key={i} className="rounded bg-amber-200 px-0.5" title={`said “${o.hyp}”`}>
+                  {o.ref}→{o.hyp}{" "}
+                </span>
+              ) : o.op === "del" ? (
+                <span key={i} className="rounded bg-red-200 px-0.5 line-through" title="missing">
+                  {o.ref}{" "}
+                </span>
+              ) : (
+                <span key={i} className="rounded bg-sky-200 px-0.5" title="extra word">
+                  +{o.hyp}{" "}
+                </span>
+              ),
+            )}
+          </div>
+          <div className="text-ink-400">전사: {repeat.transcript}</div>
+        </div>
+      )}
+    </section>
+  );
+}

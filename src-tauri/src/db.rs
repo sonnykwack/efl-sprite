@@ -55,14 +55,54 @@ const MIGRATIONS: &[&str] = &[
     CREATE INDEX idx_attempts_task ON attempts(task_id);
     CREATE INDEX idx_evaluations_attempt ON evaluations(attempt_id);
     "#,
+    // v2 — TOEFL iBT 2026 task types. SQLite cannot alter a CHECK constraint, so the
+    // table is rebuilt (runs with foreign_keys OFF; see `open`). Existing rows are kept:
+    // old speaking → interview, old writing → academic_discussion.
+    r#"
+    CREATE TABLE tasks_new (
+        id                INTEGER PRIMARY KEY,
+        section           TEXT NOT NULL,
+        task_type         TEXT NOT NULL,
+        title             TEXT NOT NULL,
+        prompt            TEXT NOT NULL,   -- listen_repeat: instructions · interview: question
+                                           -- email: situation · academic_discussion: professor's post
+        material          TEXT,            -- listen_repeat: target sentences, one per line
+                                           -- academic_discussion: classmates' posts
+        prep_seconds      INTEGER NOT NULL DEFAULT 0,
+        response_seconds  INTEGER NOT NULL,
+        created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+        CHECK (
+            (section = 'speaking' AND task_type IN ('listen_repeat', 'interview')) OR
+            (section = 'writing'  AND task_type IN ('email', 'academic_discussion'))
+        )
+    );
+    INSERT INTO tasks_new (id, section, task_type, title, prompt, material, prep_seconds, response_seconds, created_at)
+    SELECT id, section,
+           CASE WHEN section = 'speaking' THEN 'interview' ELSE 'academic_discussion' END,
+           title, prompt, material, 0,
+           CASE WHEN section = 'speaking' THEN 45 ELSE 600 END,
+           created_at
+    FROM tasks;
+    DROP TABLE tasks;
+    ALTER TABLE tasks_new RENAME TO tasks;
+    "#,
 ];
 
 pub fn open(app: &AppHandle) -> Result<Db, String> {
     let path = paths::db_path(app)?;
     let mut conn = Connection::open(&path).map_err(|e| format!("open {}: {e}", path.display()))?;
-    conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")
+    // Migrations run with foreign keys OFF so table rebuilds (DROP + RENAME) don't cascade
+    // into attempts/evaluations. Integrity is checked before turning them back on.
+    conn.execute_batch("PRAGMA foreign_keys = OFF; PRAGMA journal_mode = WAL;")
         .map_err(|e| e.to_string())?;
     migrate(&mut conn)?;
+    let broken: i64 = conn
+        .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if broken > 0 {
+        return Err(format!("database integrity check failed ({broken} broken references)"));
+    }
+    conn.execute_batch("PRAGMA foreign_keys = ON;").map_err(|e| e.to_string())?;
     Ok(Db(Mutex::new(conn)))
 }
 
@@ -156,4 +196,52 @@ pub fn delete_task(db: State<'_, Db>, id: i64) -> Result<(), String> {
     conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A v1 database with data must upgrade to v2 without losing rows or breaking FKs.
+    #[test]
+    fn migrate_v1_to_v2_keeps_rows_and_references() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+        conn.execute_batch(MIGRATIONS[0]).unwrap();
+        conn.execute_batch("PRAGMA user_version = 1;").unwrap();
+        conn.execute_batch(
+            "INSERT INTO tasks (id, section, task_type, title, prompt, prep_seconds, response_seconds)
+               VALUES (1, 'speaking', 'independent', 'Old speaking', 'Q?', 15, 45),
+                      (2, 'writing', 'integrated', 'Old writing', 'Essay', 0, 1200);
+             INSERT INTO attempts (id, task_id, response_text) VALUES (10, 2, 'my essay');",
+        )
+        .unwrap();
+
+        migrate(&mut conn).unwrap();
+
+        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version as usize, MIGRATIONS.len());
+        let types: Vec<(i64, String, i64)> = conn
+            .prepare("SELECT id, task_type, response_seconds FROM tasks ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(types, vec![(1, "interview".into(), 45), (2, "academic_discussion".into(), 600)]);
+
+        let broken: i64 = conn
+            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(broken, 0, "attempts must still reference tasks");
+
+        // New CHECK constraint rejects mismatched section/type pairs.
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        let bad = conn.execute(
+            "INSERT INTO tasks (section, task_type, title, prompt, response_seconds)
+             VALUES ('speaking', 'email', 't', 'p', 10)",
+            [],
+        );
+        assert!(bad.is_err());
+    }
 }

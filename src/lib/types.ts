@@ -41,15 +41,17 @@ export interface DownloadProgress {
 }
 
 export type Section = "speaking" | "writing";
-export type TaskType = "independent" | "integrated";
+/** TOEFL iBT 2026 task types supported by the app (see src/lib/rubrics.ts). */
+export type TaskType = "listen_repeat" | "interview" | "email" | "academic_discussion";
 
 export interface Task {
   id: number;
   section: Section;
   taskType: TaskType;
   title: string;
+  /** listen_repeat: instructions · interview: question · email: situation · academic_discussion: professor's post */
   prompt: string;
-  /** Reading passage / lecture script for integrated tasks. */
+  /** listen_repeat: target sentences (one per line) · academic_discussion: classmates' posts */
   material: string | null;
   prepSeconds: number;
   responseSeconds: number;
