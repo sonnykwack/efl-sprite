@@ -53,6 +53,11 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
 - Speaking: fluency proxies (WPM, fillers) are computed and given to the LLM; pronunciation is
   not assessed by the LLM (documented limitation).
 - Band = linear map of total/max onto 1.0–6.0 (0.5 steps). Always labelled an estimate, not ETS.
+- Prompt versions live side by side (`PromptVersion`). v1 (strict, Korean written directly) was
+  measured on Qwen2.5-3B: SD 0.94, band 2.0–2.5 for an intermediate sample, generic/wrong
+  comments, real errors never flagged. v2 = errors list first, English reasoning, separate
+  Korean translation call, full 0–5 scale + calibration note. Keep v1 for the report comparison.
+- Production scoring = `evaluateResponse(..., samples: 3)` → per-criterion median (`combineSamples`).
 - Feedback language: Korean by default (`lang: "ko"`), evidence stays verbatim English.
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.

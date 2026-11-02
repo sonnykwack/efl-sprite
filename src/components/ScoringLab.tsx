@@ -7,7 +7,16 @@ import { useState } from "react";
 import { api } from "../lib/api";
 import { scoreRepeat, type RepeatResult } from "../lib/accuracy";
 import { TASK_SPECS } from "../lib/rubrics";
-import { evaluateResponse, type FeedbackLang, type LlmEvaluation, type ScorableTask } from "../lib/scoring";
+import {
+  combineSamples,
+  evaluateOnce,
+  translateToKorean,
+  type FeedbackLang,
+  type LlmEvaluation,
+  type PromptVersion,
+  type ScorableTask,
+} from "../lib/scoring";
+import type { ModelEntry } from "../lib/types";
 
 const SAMPLE_TASK: ScorableTask = {
   taskType: "academic_discussion",
@@ -36,9 +45,13 @@ const sd = (xs: number[]) => {
   return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)));
 };
 
-export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisperId?: string }) {
+export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; whisperId?: string }) {
   const [runs, setRuns] = useState<LlmEvaluation[]>([]);
+  const [final, setFinal] = useState<LlmEvaluation | null>(null);
   const [lang, setLang] = useState<FeedbackLang>("ko");
+  const [version, setVersion] = useState<PromptVersion>("v2");
+  const [pickedLlm, setPickedLlm] = useState<string>("");
+  const llmId = pickedLlm && llms.some((m) => m.id === pickedLlm) ? pickedLlm : llms[0]?.id;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [repeat, setRepeat] = useState<RepeatResult | null>(null);
@@ -47,14 +60,24 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
   const runConsistency = async (n: number) => {
     if (!llmId) return setError("설치된 LLM 모델이 없습니다.");
     setRuns([]);
+    setFinal(null);
     setError(null);
     try {
       const out: LlmEvaluation[] = [];
       for (let i = 0; i < n; i++) {
         setBusy(`채점 ${i + 1}/${n}…`);
-        out.push(await evaluateResponse(SAMPLE_TASK, SAMPLE_RESPONSE, { modelId: llmId, lang }));
+        out.push(await evaluateOnce(SAMPLE_TASK, SAMPLE_RESPONSE, { modelId: llmId, lang, version }));
         setRuns([...out]);
       }
+      // What the app will actually show: median of the samples (+ Korean translation in v2).
+      let combined = combineSamples(out);
+      if (version === "v2" && lang === "ko") {
+        setBusy("한국어 번역 중…");
+        const t0 = performance.now();
+        combined = await translateToKorean(combined);
+        combined = { ...combined, latencyMs: combined.latencyMs + Math.round(performance.now() - t0) };
+      }
+      setFinal(combined);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -78,7 +101,7 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
 
   const btn =
     "rounded-lg border border-sprite-500 px-3 py-1.5 text-sm text-sprite-700 hover:bg-sprite-50 disabled:opacity-40";
-  const first = runs[0];
+  const shown = final ?? runs[0];
 
   return (
     <section className="mb-6 rounded-xl bg-white p-5 shadow-sm">
@@ -95,6 +118,31 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
           Listen &amp; Repeat 정확도 (JFK 샘플)
         </button>
         <label className="ml-auto flex items-center gap-2 text-xs text-ink-600">
+          모델
+          <select
+            value={llmId ?? ""}
+            onChange={(e) => setPickedLlm(e.target.value)}
+            className="rounded border border-black/10 px-2 py-1"
+          >
+            {llms.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-ink-600">
+          프롬프트
+          <select
+            value={version}
+            onChange={(e) => setVersion(e.target.value as PromptVersion)}
+            className="rounded border border-black/10 px-2 py-1"
+          >
+            <option value="v2">v2 (개선)</option>
+            <option value="v1">v1 (초기)</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-ink-600">
           피드백 언어
           <select
             value={lang}
@@ -124,6 +172,7 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
                 ))}
                 <th>합계</th>
                 <th>밴드</th>
+                <th>교정 수</th>
                 <th>근거 실재율</th>
                 <th>시간</th>
               </tr>
@@ -139,6 +188,7 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
                     {r.total}/{r.max}
                   </td>
                   <td>{r.band.toFixed(1)}</td>
+                  <td>{r.errors.length}</td>
                   <td>{Math.round(mean(r.criteria.map((c) => c.grounded)) * 100)}%</td>
                   <td>{(r.latencyMs / 1000).toFixed(1)}s</td>
                 </tr>
@@ -158,6 +208,7 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
                     {mean(runs.map((r) => r.total)).toFixed(2)} ± {sd(runs.map((r) => r.total)).toFixed(2)}
                   </td>
                   <td>{mean(runs.map((r) => r.band)).toFixed(2)}</td>
+                  <td>{mean(runs.map((r) => r.errors.length)).toFixed(1)}</td>
                   <td>{Math.round(mean(runs.flatMap((r) => r.criteria.map((c) => c.grounded))) * 100)}%</td>
                   <td>{(mean(runs.map((r) => r.latencyMs)) / 1000).toFixed(1)}s</td>
                 </tr>
@@ -167,11 +218,26 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
         </div>
       )}
 
-      {first && (
+      {shown && (
         <details className="mb-4 rounded-lg bg-sprite-50 p-3 text-xs" open>
-          <summary className="cursor-pointer font-semibold text-ink-600">1회차 상세 피드백</summary>
+          <summary className="cursor-pointer font-semibold text-ink-600">
+            {final ? `최종 결과 (중앙값 ${final.samples}회 · 밴드 ${final.band.toFixed(1)} · 총 ${(final.latencyMs / 1000).toFixed(1)}s)` : "1회차 상세 피드백"}
+          </summary>
           <div className="mt-2 grid gap-3" data-selectable>
-            {first.criteria.map((c) => (
+            {shown.errors.length > 0 && (
+              <div>
+                <div className="font-semibold">문법 · 어휘 교정</div>
+                <ul className="ml-4 list-disc text-ink-600">
+                  {shown.errors.map((e, i) => (
+                    <li key={i} className={e.grounded ? "" : "text-red-600"}>
+                      <span className="line-through">{e.quote}</span> → <span className="font-semibold text-sprite-700">{e.correction}</span>
+                      {!e.grounded && " (답안에 없는 인용)"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {shown.criteria.map((c) => (
               <div key={c.key}>
                 <div className="font-semibold">
                   {c.nameKo} ({c.name}) — {c.score}/5
@@ -186,7 +252,7 @@ export default function ScoringLab({ llmId, whisperId }: { llmId?: string; whisp
             ))}
             <div className="border-t border-black/10 pt-2">
               <span className="font-semibold">총평 </span>
-              {first.overallFeedback}
+              {shown.overallFeedback}
             </div>
           </div>
         </details>

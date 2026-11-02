@@ -166,7 +166,10 @@ export default function SettingsPage() {
         </section>
       ))}
 
-      <ScoringLab llmId={firstInstalled("llm")?.id} whisperId={firstInstalled("whisper")?.id} />
+      <ScoringLab
+        llms={models.filter((m) => m.kind === "llm" && m.installed)}
+        whisperId={firstInstalled("whisper")?.id}
+      />
 
       <section className="rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-ink-600">엔진 연결 테스트</h2>
