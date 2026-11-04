@@ -20,6 +20,7 @@ export default function ResultPage({ attemptId, navigate }: { attemptId?: number
   const [recent, setRecent] = useState<AttemptSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
 
   const load = () => {
     if (!inTauri()) return;
@@ -84,6 +85,7 @@ export default function ResultPage({ attemptId, navigate }: { attemptId?: number
         mode,
         (s: Stage) => setBusy(STAGE_KO[s]),
       );
+      setSelected(null);
       load();
     } catch (e) {
       setError(String(e));
@@ -155,13 +157,12 @@ export default function ResultPage({ attemptId, navigate }: { attemptId?: number
               </span>
             </div>
             {ev ? (
-              <AnnotatedResponse text={detail.responseText} errors={ev.errors} />
+              <AnnotatedResponse text={detail.responseText} errors={ev.errors} selected={selected} onSelect={setSelected} />
             ) : (
               <p className="whitespace-pre-wrap text-sm leading-7" data-selectable>
                 {detail.responseText}
               </p>
             )}
-            {ev && <p className="mt-2 text-[11px] text-ink-400">밑줄 친 부분에 마우스를 올리면 고친 표현이 보여요.</p>}
           </section>
 
           <details className="rounded-xl bg-white p-5 text-sm shadow-sm">
@@ -224,11 +225,15 @@ export default function ResultPage({ attemptId, navigate }: { attemptId?: number
                 </select>
               </label>
             </div>
-            <FeedbackView evaluation={ev} />
+            <FeedbackView evaluation={ev} selected={selected} onSelect={setSelected} />
             <div className="flex gap-2 text-xs">
-              <button disabled={!!busy} className={`${btn} border border-black/10 text-ink-600`} onClick={() => rescore("precise")}>
-                정밀 채점으로 다시 채점
+              <button disabled={!!busy} className={`${btn} border border-black/10 text-ink-600`} onClick={() => rescore("quick")}>
+                빠른 채점으로 다시
               </button>
+              <button disabled={!!busy} className={`${btn} border border-black/10 text-ink-600`} onClick={() => rescore("precise")}>
+                정밀 채점으로 다시
+              </button>
+              <span className="self-center text-ink-400">프롬프트 {ev.version}</span>
             </div>
           </div>
         )}

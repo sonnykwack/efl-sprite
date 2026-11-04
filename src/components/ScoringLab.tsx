@@ -53,6 +53,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
   const [versionPick, setVersionPick] = useState<PromptVersion | "auto">("auto");
   const [pickedLlm, setPickedLlm] = useState<string>("");
   const [wallMs, setWallMs] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
   const llm =
     llms.find((m) => m.id === pickedLlm) ?? llms.find((m) => m.recommended) ?? llms[0];
   const llmId = llm?.id;
@@ -67,6 +68,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
   const runConsistency = async (n: number) => {
     if (!llmId) return setError("설치된 LLM 모델이 없습니다.");
     setRuns([]);
+    setSelected(null);
     setFinal(null);
     setWallMs(null);
     setError(null);
@@ -151,6 +153,7 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
             className="rounded border border-black/10 px-2 py-1"
           >
             <option value="auto">자동 (모델 권장: {llm?.prompt ?? "v3"})</option>
+            <option value="v4">v4 (보정 + 문법 설명)</option>
             <option value="v3">v3 (분석 후 채점)</option>
             <option value="v2">v2</option>
             <option value="v1">v1 (초기)</option>
@@ -247,9 +250,9 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
           </summary>
           <div className="mt-3 grid gap-4">
             <div className="rounded-xl bg-white p-4 shadow-sm">
-              <AnnotatedResponse text={SAMPLE_RESPONSE} errors={shown.errors} />
+              <AnnotatedResponse text={SAMPLE_RESPONSE} errors={shown.errors} selected={selected} onSelect={setSelected} />
             </div>
-            <FeedbackView evaluation={shown} />
+            <FeedbackView evaluation={shown} selected={selected} onSelect={setSelected} />
           </div>
         </details>
       )}

@@ -29,6 +29,10 @@ export interface TaskSpec {
   criteria: Criterion[];
   /** Target length for model answers. */
   sampleWords: string;
+  /** Minimum expected words; shorter responses get content-score caps (scoring.ts). */
+  minWords?: number;
+  /** Criteria about content (capped for very short responses); others = language/tone. */
+  contentCriteria?: string[];
 }
 
 export const SCALE_MAX = 5;
@@ -93,6 +97,8 @@ export const TASK_SPECS: Record<TaskType, TaskSpec> = {
       },
     ],
     sampleWords: "100–120 words (about 45 seconds of speech)",
+    minWords: 60,
+    contentCriteria: ["development"],
   },
   email: {
     type: "email",
@@ -129,6 +135,8 @@ export const TASK_SPECS: Record<TaskType, TaskSpec> = {
       LANGUAGE_USE,
     ],
     sampleWords: "120–150 words",
+    minWords: 100,
+    contentCriteria: ["task"],
   },
   academic_discussion: {
     type: "academic_discussion",
@@ -165,6 +173,8 @@ export const TASK_SPECS: Record<TaskType, TaskSpec> = {
       LANGUAGE_USE,
     ],
     sampleWords: "at least 100 words (aim for 120–150)",
+    minWords: 100,
+    contentCriteria: ["contribution", "support"],
   },
 };
 
@@ -174,10 +184,29 @@ export const TASK_TYPES_BY_SECTION: Record<Section, TaskType[]> = {
 };
 
 /**
- * Map a 0–1 ratio onto the TOEFL 2026 band scale (1.0–6.0, 0.5 steps).
- * Heuristic linear mapping — documented as an estimate, not an ETS conversion.
+ * Mean criterion score (0–5) → estimated TOEFL 2026 band (1.0–6.0), piecewise linear.
+ *
+ * PROVISIONAL. v1 used band = 1 + 5·ratio, which mapped "all criteria 3/5" to 4.0 and even
+ * "all 1/5" to 2.0 — measured as too generous (AD-1: AI 4.0 vs teacher 3.0–3.5; ES-1 weak
+ * email: AI 4.0 vs intended ~2). This table follows the rubric wording (3 = "adequate" ≈
+ * band 3.5) and agrees with the AD-1 teacher score. Re-fit it on the teacher's blind ES-1
+ * scores (docs/sample-set.md) — keep it a table so refitting only changes numbers.
  */
+export const BAND_MAP: [score: number, band: number][] = [
+  [0, 1.0],
+  [1, 1.5],
+  [2, 2.5],
+  [3, 3.5],
+  [4, 4.5],
+  [5, 6.0],
+];
+
 export function toBand(ratio: number): number {
-  const r = Math.min(1, Math.max(0, ratio));
-  return Math.round((1 + 5 * r) * 2) / 2;
+  const s = Math.min(1, Math.max(0, ratio)) * 5;
+  for (let i = 1; i < BAND_MAP.length; i++) {
+    const [s0, b0] = BAND_MAP[i - 1];
+    const [s1, b1] = BAND_MAP[i];
+    if (s <= s1) return Math.round((b0 + ((s - s0) / (s1 - s0)) * (b1 - b0)) * 2) / 2;
+  }
+  return 6;
 }

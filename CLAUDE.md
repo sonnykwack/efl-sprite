@@ -68,6 +68,11 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
   words) the LLM misses; rule items win over overlapping LLM items.
 - `src/lib/snap.ts` maps every model quote to the closest real span of the response, so the
   student always sees their own words. Report both raw and after-snap grounding.
+- v4 (default for 7B/Gemma) = v3 + calibration anchors (`calibration.ts`, topics disjoint from
+  evaluation sets), error taxonomy with curated Korean principles (`grammarGuide.ts`) + model's
+  one-line `why`, email required-points coverage, deterministic caps (`applyCaps`), and the
+  piecewise `BAND_MAP` in rubrics.ts (provisional; refit on teacher data).
+- macOS WKWebView shows no `title` tooltips — never rely on hover; use click/tap UI.
 - Production scoring = `evaluateResponse(..., samples: 3)` → samples sent concurrently
   (llama-server `--parallel 3`, 3 × 8192 ctx) → per-criterion median (`combineSamples`).
 - Feedback language: Korean by default (`lang: "ko"`), evidence stays verbatim English.

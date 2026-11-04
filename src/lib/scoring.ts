@@ -24,10 +24,24 @@
 //       v3 also adds a teacher-derived checklist and typed corrections (see ERROR_CHECKLIST):
 //       a TOEFL teacher scored the lab sample band 3.0–3.5 and flagged exactly these kinds of
 //       issues, most of which v2 missed (fragments, informal connectors, vague words).
+//  v4 — after ES-1 (teacher: "scores too generous", a 55-word demanding email got 4.0;
+//       corrections had no explanation): calibration anchors (scored weak/adequate/strong
+//       examples, src/lib/calibration.ts), "use the full scale", each correction classified
+//       into a fixed taxonomy (src/lib/grammarGuide.ts) with a one-line reason, email
+//       requirement coverage, and deterministic caps for short / incomplete responses.
 //  evaluateResponse() can additionally take the per-criterion MEDIAN of several samples.
 
 import { api } from "./api";
 import { normalizeWords } from "./accuracy";
+import { anchorText } from "./calibration";
+import {
+  CATEGORIES,
+  KIND_OF,
+  TAXONOMY_PROMPT,
+  categoryFromKind,
+  type ErrorCategory,
+  type ErrorKind,
+} from "./grammarGuide";
 import { detectRuleIssues } from "./rules";
 import { snapQuote } from "./snap";
 import { SCALE_MAX, TASK_SPECS, toBand, type Criterion } from "./rubrics";
@@ -58,13 +72,19 @@ export interface CriterionResult {
   groundedAfterSnap: number;
   comment: string;
   score: number;
+  /** Score before a deterministic cap (only set when a cap lowered it). */
+  uncapped?: number;
 }
 
-export type ErrorKind = "grammar" | "sentence" | "word_choice" | "register";
+export type { ErrorKind, ErrorCategory };
 
 export interface LanguageError {
-  /** v3+: what kind of problem (v1/v2 → "grammar"). */
+  /** Display group (colour). Derived from `category`. */
   kind: ErrorKind;
+  /** Taxonomy category → curated explanation in grammarGuide.ts. */
+  category: ErrorCategory;
+  /** One-line reason specific to this sentence (model or rule); may be empty. */
+  why: string;
   /** Shown text: the student's original words (snapped if the model paraphrased). */
   quote: string;
   correction: string;
@@ -79,6 +99,11 @@ export interface LanguageError {
   end: number;
 }
 
+export interface RequiredPoint {
+  point: string;
+  status: "covered" | "partial" | "missing";
+}
+
 export interface ResponseAnalysis {
   mainPoint: string;
   supportGiven: string[];
@@ -89,8 +114,13 @@ export interface LlmEvaluation {
   version: PromptVersion;
   criteria: CriterionResult[];
   errors: LanguageError[];
-  /** v3 only: what the model read in the response before judging it. */
+  /** v3+: what the model read in the response before judging it. */
   analysis: ResponseAnalysis | null;
+  /** v4, email: whether each required bullet point was addressed. */
+  points: RequiredPoint[] | null;
+  /** v4: human-readable (Korean) reasons for score caps that were applied. */
+  caps: string[];
+  wordCount: number;
   overallFeedback: string;
   total: number;
   max: number;
@@ -104,8 +134,17 @@ export interface LlmEvaluation {
 }
 
 export type FeedbackLang = "ko" | "en";
-export type PromptVersion = "v1" | "v2" | "v3";
-export const DEFAULT_PROMPT_VERSION: PromptVersion = "v3";
+export type PromptVersion = "v1" | "v2" | "v3" | "v4";
+export const DEFAULT_PROMPT_VERSION: PromptVersion = "v4";
+
+/** Required bullet points of an email task ("- describe the problem"). */
+export function requiredPoints(prompt: string): string[] {
+  return prompt
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /^[-•*]\s+/.test(l))
+    .map((l) => l.replace(/^[-•*]\s+/, ""));
+}
 
 const FILLERS = new Set(["um", "uh", "erm", "er", "hmm", "uhm", "ah"]);
 
@@ -138,21 +177,35 @@ function criterionSchema(maxComment: number) {
 }
 
 /** JSON schema whose key order fixes the generation order (serde_json preserve_order). */
-export function evaluationSchema(criteria: Criterion[], version: PromptVersion = DEFAULT_PROMPT_VERSION) {
+export function evaluationSchema(
+  criteria: Criterion[],
+  version: PromptVersion = DEFAULT_PROMPT_VERSION,
+  opts: { requiredPoints?: number } = {},
+) {
   const properties: Record<string, unknown> = {};
   if (version !== "v1") {
     // Errors come FIRST so the language score is anchored to concrete mistakes.
-    const typed = version === "v3";
+    const itemProps: Record<string, unknown> =
+      version === "v4"
+        ? {
+            category: { type: "string", enum: CATEGORIES },
+            quote: { type: "string", maxLength: 120 },
+            correction: { type: "string", maxLength: 140 },
+            why: { type: "string", maxLength: 160 },
+          }
+        : version === "v3"
+          ? {
+              kind: { type: "string", enum: ["grammar", "sentence", "word_choice", "register"] },
+              quote: { type: "string", maxLength: 120 },
+              correction: { type: "string", maxLength: 140 },
+            }
+          : { quote: { type: "string", maxLength: 120 }, correction: { type: "string", maxLength: 140 } };
     properties.errors = {
       type: "array",
       items: {
         type: "object",
-        properties: {
-          ...(typed ? { kind: { type: "string", enum: ["grammar", "sentence", "word_choice", "register"] } } : {}),
-          quote: { type: "string", maxLength: 120 },
-          correction: { type: "string", maxLength: 140 },
-        },
-        required: typed ? ["kind", "quote", "correction"] : ["quote", "correction"],
+        properties: itemProps,
+        required: Object.keys(itemProps),
         additionalProperties: false,
       },
       minItems: 0,
@@ -161,22 +214,40 @@ export function evaluationSchema(criteria: Criterion[], version: PromptVersion =
       maxItems: 6,
     };
   }
-  if (version === "v3") {
+  if (version === "v3" || version === "v4") {
     // Comprehension before judgment: what does the response actually say?
+    const n = version === "v4" ? opts.requiredPoints ?? 0 : 0;
+    const analysisProps: Record<string, unknown> = {
+      main_point: { type: "string", maxLength: 200 },
+      support_given: { type: "array", items: { type: "string", maxLength: 200 }, minItems: 0, maxItems: 4 },
+      not_addressed: { type: "string", maxLength: 200 },
+    };
+    if (n > 0) {
+      analysisProps.required_points = {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            point: { type: "string", maxLength: 100 },
+            status: { type: "string", enum: ["covered", "partial", "missing"] },
+          },
+          required: ["point", "status"],
+          additionalProperties: false,
+        },
+        minItems: n,
+        maxItems: n,
+      };
+    }
     properties.analysis = {
       type: "object",
-      properties: {
-        main_point: { type: "string", maxLength: 200 },
-        support_given: { type: "array", items: { type: "string", maxLength: 200 }, minItems: 0, maxItems: 4 },
-        not_addressed: { type: "string", maxLength: 200 },
-      },
-      required: ["main_point", "support_given", "not_addressed"],
+      properties: analysisProps,
+      required: Object.keys(analysisProps),
       additionalProperties: false,
     };
   }
   for (const c of criteria) properties[c.key] = criterionSchema(version === "v1" ? 320 : 260);
   properties.overall_feedback = { type: "string", maxLength: version === "v1" ? 600 : 400 };
-  const head = version === "v1" ? [] : version === "v2" ? ["errors"] : ["errors", "analysis"];
+  const head = version === "v1" ? [] : version === "v2" ? ["errors"] : ["errors", "analysis"];  // v3, v4
   return {
     type: "object",
     properties,
@@ -294,6 +365,41 @@ export function buildEvaluationMessages(
     ];
   }
 
+  if (version === "v4") {
+    const points = task.taskType === "email" ? requiredPoints(task.prompt) : [];
+    const system = [
+      `You are an experienced, fair rater of English ${spec.section} responses for TOEFL iBT-style practice (task: ${spec.label}).`,
+      "Only the text inside <student_response> is the student's work. Quote ONLY from it.",
+      "Work in this order:",
+      `1. errors: up to 6 real errors, most important first. For each: category (one of: ${TAXONOMY_PROMPT}); quote = the exact words from <student_response> (2–10 words); correction = the same words, corrected; why = ONE short sentence naming what is wrong in THIS sentence (e.g. "'students' is plural, so the verb must be 'are'"). Never list text that is already correct.`,
+      "2. analysis — read before you judge:",
+      "   main_point: the student's position or purpose in one sentence.",
+      "   support_given: each reason or example the student actually gives (one short line each). A personal story with details IS a specific example.",
+      "   not_addressed: what the task asks for that is missing, ideas only repeated from <classmates_posts>, and reasons that are stated but not explained.",
+      points.length
+        ? `   required_points: for EACH of these ${points.length} required points, in order, say covered / partial / missing: ${points.map((p, i) => `(${i + 1}) ${p}`).join(" ")}`
+        : "",
+      `3. For each criterion: evidence (1–3 phrases copied exactly from <student_response>), comment (mention specific content from THIS response and how to improve; never copy rubric wording), score (integer 0–${SCALE_MAX}).`,
+      "   Scores must agree with your analysis.",
+      "4. overall_feedback: the main strength, then the single most useful thing to work on (two or three sentences).",
+      "Use the FULL scale. A very short, incomplete or impolite response belongs at 0–2, not 3. Reserve 5 for responses like the strong example.",
+      "Address the student as 'you'. Write in clear, simple English.",
+      "",
+      SCALE_V2,
+      "",
+      "## Rubric",
+      rubricText(spec.criteria),
+      "",
+      anchorText(task.taskType),
+    ]
+      .filter((l) => l !== "")
+      .join("\n");
+    return [
+      { role: "system", content: system },
+      { role: "user", content: taskTextTagged(task, response, opts.stats) },
+    ];
+  }
+
   if (version === "v3") {
     const system = [
       `You are an experienced, fair rater of English ${spec.section} responses for TOEFL iBT-style practice (task: ${spec.label}).`,
@@ -388,12 +494,19 @@ export function parseEvaluation(
     };
   });
   const llmErrors: LanguageError[] = (Array.isArray(data.errors) ? data.errors : [])
-    .map((e) => e as { kind?: unknown; quote?: unknown; correction?: unknown })
-    .map((e) => ({
-      kind: (["grammar", "sentence", "word_choice", "register"].includes(String(e.kind)) ? String(e.kind) : "grammar") as ErrorKind,
-      quote: String(e.quote ?? ""),
-      correction: String(e.correction ?? ""),
-    }))
+    .map((e) => e as { kind?: unknown; category?: unknown; quote?: unknown; correction?: unknown; why?: unknown })
+    .map((e) => {
+      const category: ErrorCategory = CATEGORIES.includes(e.category as ErrorCategory)
+        ? (e.category as ErrorCategory)
+        : categoryFromKind(e.kind as string | undefined);
+      return {
+        category,
+        kind: KIND_OF(category),
+        why: String(e.why ?? ""),
+        quote: String(e.quote ?? ""),
+        correction: String(e.correction ?? ""),
+      };
+    })
     .filter((e) => e.quote)
     // Snap BEFORE judging no-ops: models often quote the corrected form ("students are
     // understanding" → itself); snapping recovers the real error ("students is understanding").
@@ -421,10 +534,23 @@ export function parseEvaluation(
           // A fragment quote starts with the previous sentence's last words purely as
           // context; the error itself begins at "Because …".
           const ctx = r.rule === "fragment" && snap.start >= 0 ? r.quote.indexOf(". ") + 2 : 0;
-          return { kind: r.kind, quote: r.quote, correction: r.correction, grounded: true, located: true, source: "rule", start: snap.start + ctx, end: snap.end };
+          return {
+            kind: r.kind,
+            category: r.category,
+            why: r.why,
+            quote: r.quote,
+            correction: r.correction,
+            grounded: true,
+            located: true,
+            source: "rule" as const,
+            start: snap.start + ctx,
+            end: snap.end,
+          };
         });
   const errors = mergeCorrections(rules, llmErrors);
-  const a = data.analysis as { main_point?: unknown; support_given?: unknown; not_addressed?: unknown } | undefined;
+  const a = data.analysis as
+    | { main_point?: unknown; support_given?: unknown; not_addressed?: unknown; required_points?: unknown }
+    | undefined;
   const analysis: ResponseAnalysis | null = a
     ? {
         mainPoint: String(a.main_point ?? ""),
@@ -432,12 +558,28 @@ export function parseEvaluation(
         notAddressed: String(a.not_addressed ?? ""),
       }
     : null;
+  // Email: use the task's own bullet text (the model only judges status).
+  const bullets = task.taskType === "email" ? requiredPoints(task.prompt) : [];
+  const points: RequiredPoint[] | null =
+    meta.version === "v4" && bullets.length && Array.isArray(a?.required_points)
+      ? bullets.map((point, i) => {
+          const st = (a!.required_points as { status?: unknown }[])[i]?.status;
+          return { point, status: st === "covered" || st === "partial" || st === "missing" ? st : "missing" };
+        })
+      : null;
+
+  const wordCount = normalizeWords(response).length;
+  const caps = meta.version === "v4" ? applyCaps(criteria, task, wordCount, points) : [];
+
   return finalize(
     {
       version: meta.version,
       criteria,
       errors,
       analysis,
+      points,
+      caps,
+      wordCount,
       overallFeedback: String(data.overall_feedback ?? ""),
       latencyMs: meta.latencyMs,
       modelId: meta.modelId,
@@ -445,6 +587,49 @@ export function parseEvaluation(
       raw,
     },
   );
+}
+
+/**
+ * Deterministic score caps (v4). The model alone gave a 55-word, demanding email 3/5 on
+ * every criterion; length and required-point coverage are facts we can check ourselves.
+ *  - words < 50% of the task minimum → content criteria ≤ 1;  < 80% → ≤ 2
+ *  - email: missing required points (partial = ½) ≥ 2 → task ≤ 2; ≥ 1 → ≤ 3; ½ → ≤ 4
+ * Mutates `criteria` (keeps the model's score in `uncapped`) and returns Korean reasons.
+ */
+export function applyCaps(
+  criteria: CriterionResult[],
+  task: ScorableTask,
+  wordCount: number,
+  points: RequiredPoint[] | null,
+): string[] {
+  const spec = TASK_SPECS[task.taskType];
+  const reasons: string[] = [];
+  const cap = (key: string, max: number) => {
+    const c = criteria.find((x) => x.key === key);
+    if (c && c.score > max) {
+      c.uncapped ??= c.score;
+      c.score = max;
+    }
+  };
+  if (spec.minWords && spec.contentCriteria?.length) {
+    const ratio = wordCount / spec.minWords;
+    const max = ratio < 0.5 ? 1 : ratio < 0.8 ? 2 : null;
+    if (max != null) {
+      spec.contentCriteria.forEach((k) => cap(k, max));
+      reasons.push(
+        `분량 부족: ${wordCount}단어 (권장 최소 ${spec.minWords}단어의 ${Math.round(ratio * 100)}%) → 내용 항목 최대 ${max}점`,
+      );
+    }
+  }
+  if (points?.length) {
+    const missing = points.reduce((s, p) => s + (p.status === "missing" ? 1 : p.status === "partial" ? 0.5 : 0), 0);
+    const max = missing >= 2 ? 2 : missing >= 1 ? 3 : missing > 0 ? 4 : null;
+    if (max != null) {
+      cap("task", max);
+      reasons.push(`요구사항 ${points.length}개 중 일부를 다루지 않음 → 과제 수행 최대 ${max}점`);
+    }
+  }
+  return reasons;
 }
 
 /**
@@ -516,7 +701,9 @@ export function combineSamples(samples: LlmEvaluation[]): LlmEvaluation {
 
 /** Translate comments + overall feedback to Korean in one constrained call (v2). */
 export async function translateToKorean(e: LlmEvaluation): Promise<LlmEvaluation> {
-  const texts = [...e.criteria.map((c) => c.comment), e.overallFeedback];
+  // Rule reasons are already Korean; only the model's English "why" lines need translating.
+  const whyIdx = e.errors.map((x, i) => (x.source === "llm" && x.why ? i : -1)).filter((i) => i >= 0);
+  const texts = [...e.criteria.map((c) => c.comment), e.overallFeedback, ...whyIdx.map((i) => e.errors[i].why)];
   const raw = await api.llmChat(
     [
       {
@@ -539,10 +726,16 @@ export async function translateToKorean(e: LlmEvaluation): Promise<LlmEvaluation
   );
   const ko: string[] = JSON.parse(raw).ko ?? [];
   if (ko.length !== texts.length) return e;
+  const n = e.criteria.length;
+  const errors = [...e.errors];
+  whyIdx.forEach((errIdx, k) => {
+    errors[errIdx] = { ...errors[errIdx], why: ko[n + 1 + k] || errors[errIdx].why };
+  });
   return {
     ...e,
     criteria: e.criteria.map((c, i) => ({ ...c, comment: ko[i] || c.comment })),
-    overallFeedback: ko[texts.length - 1] || e.overallFeedback,
+    overallFeedback: ko[n] || e.overallFeedback,
+    errors,
   };
 }
 
@@ -560,7 +753,8 @@ export async function evaluateOnce(
   await api.llmStart(opts.modelId);
   const messages = buildEvaluationMessages(task, response, { lang: opts.lang ?? "ko", stats: opts.stats, version });
   const t0 = performance.now();
-  const raw = await api.llmChat(messages, evaluationSchema(spec.criteria, version));
+  const nPoints = task.taskType === "email" ? requiredPoints(task.prompt).length : 0;
+  const raw = await api.llmChat(messages, evaluationSchema(spec.criteria, version, { requiredPoints: nPoints }));
   return parseEvaluation(raw, task, response, {
     latencyMs: Math.round(performance.now() - t0),
     modelId: opts.modelId,

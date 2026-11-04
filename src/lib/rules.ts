@@ -8,6 +8,9 @@ export type RuleKind = "sentence" | "register" | "word_choice";
 
 export interface RuleIssue {
   kind: RuleKind;
+  category: "fragment" | "register" | "word_choice";
+  /** Fixed, sentence-specific reason in Korean. */
+  why: string;
   /** Exact text from the response. */
   quote: string;
   correction: string;
@@ -43,7 +46,12 @@ const VAGUE: { re: RegExp; correction: (m: string) => string }[] = [
   { re: /\bthings?\b/i, correction: (m) => (m.toLowerCase().endsWith("s") ? "aspects / issues" : "aspect / issue") },
   { re: /\bstuff\b/i, correction: () => "materials / things (be specific)" },
   { re: /\ba lot of\b/i, correction: () => "many / much / a great deal of" },
-  { re: /\bsome (?=[a-z]+\b)(?!of\b|people\b|students\b)[a-z]+/i, correction: (m) => `a certain amount of ${m.split(/\s+/)[1]}` },
+  // Only uncountable abstract nouns: "some pressure" → "a certain amount of pressure".
+  // For countable nouns ("some discount") the right fix depends on meaning, so leave it to the LLM.
+  {
+    re: /\bsome (?:pressure|time|help|money|information|experience|advice|effort|stress|knowledge|freedom|support)\b/i,
+    correction: (m) => `a certain amount of ${m.split(/\s+/)[1]}`,
+  },
   { re: /\bvery (?:good|bad|hard|easy|important|big|small|difficult)\b/i, correction: (m) => STRONG[m.split(/\s+/)[1].toLowerCase()] ?? m },
 ];
 const STRONG: Record<string, string> = {
@@ -87,6 +95,8 @@ export function detectRuleIssues(response: string): RuleIssue[] {
       const head = firstWords(s.text, 4);
       out.push({
         kind: "sentence",
+        category: "fragment",
+        why: `'${sub[1]} …'로 시작하는 문장에 주절이 없어요. 앞 문장의 이유를 설명하는 내용이므로 앞 문장과 하나로 이어야 해요.`,
         quote: `${prevTail}. ${head}`,
         correction: `${prevTail} ${sub[1].toLowerCase()} ${head.split(/\s+/).slice(1).join(" ")}`,
         rule: "fragment",
@@ -97,6 +107,8 @@ export function detectRuleIssues(response: string): RuleIssue[] {
     if (opener) {
       out.push({
         kind: "register",
+        category: "register",
+        why: `문장을 '${opener[1]}'로 시작하는 것은 말할 때의 표현이에요. 글에서는 '${OPENERS[opener[1]].replace(",", "")}'가 더 격식 있어요.`,
         quote: firstWords(s.text, 3),
         correction: `${OPENERS[opener[1]]} ${firstWords(s.text, 3).split(/\s+/).slice(1).join(" ").replace(/^,\s*/, "")}`,
         rule: "informal-opener",
@@ -106,7 +118,7 @@ export function detectRuleIssues(response: string): RuleIssue[] {
 
   // 3. ", so <word>" inside a sentence → "; therefore, <word>"
   const so = response.match(/, so (\w+)/);
-  if (so) out.push({ kind: "register", quote: `so ${so[1]}`, correction: `therefore, ${so[1]}`, rule: "informal-so" });
+  if (so) out.push({ kind: "register", category: "register", why: "결과를 잇는 'so'는 구어체 느낌이 강해요. 글에서는 'therefore'나 'as a result'가 더 적절해요.", quote: `so ${so[1]}`, correction: `therefore, ${so[1]}`, rule: "informal-so" });
 
   // 4. Vague words — first occurrence of each pattern only, to avoid noise.
   for (const v of VAGUE) {
@@ -114,7 +126,7 @@ export function detectRuleIssues(response: string): RuleIssue[] {
     if (!m) continue;
     // "this kind of thing" already covers the bare "thing" rule.
     if (/thing/i.test(m[0]) && out.some((o) => o.rule === "vague" && /thing/i.test(o.quote))) continue;
-    out.push({ kind: "word_choice", quote: m[0], correction: matchCase(m[0], v.correction(m[0])), rule: "vague" });
+    out.push({ kind: "word_choice", category: "word_choice", why: `'${m[0]}'은(는) 뜻이 막연해요. 무엇을 가리키는지 구체적인 단어로 바꾸면 더 정확해져요.`, quote: m[0], correction: matchCase(m[0], v.correction(m[0])), rule: "vague" });
   }
   return out;
 }

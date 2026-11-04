@@ -54,7 +54,7 @@
     "minVramGb": 6,
     "recommended": false,
     "notes": "영어 첨삭 문장이 자연스러움",
-    "prompt": "v3"
+    "prompt": "v4"
   },
   {
     "id": "llm-qwen2.5-7b",
@@ -65,7 +65,7 @@
     "sizeMb": 4500,
     "minVramGb": 8,
     "recommended": true,
-    "notes": "기본값 · 교사 채점과 가장 가까움 (v3 프롬프트)",
-    "prompt": "v3"
+    "notes": "기본값 · 교사 채점과 가장 가까움 (v4 프롬프트)",
+    "prompt": "v4"
   }
 ]

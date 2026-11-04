@@ -76,6 +76,26 @@ Total for 3 samples + translation: 3B-v3 63.6 s, 7B-v3 140.0 s (sequential), 7B 
   12 distinct corrections, none duplicated.
 - Given SD 0, a single sample may be enough for 7B: plan "quick (1×)" vs "precise (3×)".
 
+## ES-1 first pass (2026-11-04, 7B, v3 hybrid, quick 1×) — teacher feedback
+- 8 answers scored 3.5–5.0 although designed levels span ~2–5; Email 2-B (55 words,
+  demanding tone, intended ~2) got **4.0**. Teacher: "scores too generous overall".
+- Corrections: hover did not show the fix (macOS WKWebView shows no `title` tooltips) and
+  there was no explanation of WHY each phrase was wrong.
+
+### Changes → prompt v4
+- Calibration anchors (`src/lib/calibration.ts`): scored weak / adequate / strong examples for
+  email and academic discussion, on topics disjoint from AD-1 and ES-1.
+- "Use the full scale" instruction; required-points coverage for emails.
+- Deterministic caps: < 50% of min words → content ≤ 1, < 80% → ≤ 2; missing email points cap
+  Task Achievement. Shown to the student with the reason.
+- Band table (`BAND_MAP`): mean criterion score 3 → 3.5 (was 4.0), 2 → 2.5, 1 → 1.5.
+  Provisional — refit on the teacher's blind ES-1 scores.
+- Error taxonomy (`src/lib/grammarGuide.ts`): the model classifies (11 categories) and writes
+  a one-line sentence-specific reason; the principle text is curated, not generated.
+- UI: click an underlined phrase → card with word-level diff, reason, principle, examples.
+- Offline replay of Email 2-B: fully lenient model output (3/3/3) → band 3.0 (was 4.0) from caps
+  + table alone; with an anchored-style output (2/1/2) → **2.0**.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).
