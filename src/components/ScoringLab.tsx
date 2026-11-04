@@ -5,6 +5,7 @@
 //  - Listen and Repeat accuracy on the bundled JFK sample
 import { useState } from "react";
 import { api } from "../lib/api";
+import FeedbackView, { AnnotatedResponse } from "./FeedbackView";
 import { scoreRepeat, type RepeatResult } from "../lib/accuracy";
 import { TASK_SPECS } from "../lib/rubrics";
 import {
@@ -38,8 +39,6 @@ const SAMPLE_RESPONSE =
 
 const JFK_TARGET =
   "And so, my fellow Americans, ask not what your country can do for you; ask what you can do for your country.";
-
-const KIND_KO = { grammar: "문법", sentence: "문장 구조", word_choice: "어휘", register: "격식" } as const;
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(xs.length, 1);
 const sd = (xs: number[]) => {
@@ -246,55 +245,11 @@ export default function ScoringLab({ llms, whisperId }: { llms: ModelEntry[]; wh
               ? `최종 결과 (${version} · 중앙값 ${final.samples}회 · 밴드 ${final.band.toFixed(1)} · 번역 포함 총 ${((wallMs ?? final.latencyMs) / 1000).toFixed(1)}s)`
               : "1회차 상세 피드백"}
           </summary>
-          <div className="mt-2 grid gap-3" data-selectable>
-            {shown.analysis && (
-              <div className="rounded bg-white/60 p-2">
-                <div className="font-semibold">AI가 읽은 내용 (분석)</div>
-                <div>주장: {shown.analysis.mainPoint}</div>
-                <ul className="ml-4 list-disc text-ink-600">
-                  {shown.analysis.supportGiven.map((x, i) => (
-                    <li key={i}>{x}</li>
-                  ))}
-                </ul>
-                <div>부족한 점: {shown.analysis.notAddressed}</div>
-              </div>
-            )}
-            {shown.errors.length > 0 && (
-              <div>
-                <div className="font-semibold">문법 · 어휘 교정</div>
-                <ul className="ml-4 list-disc text-ink-600">
-                  {shown.errors.map((e, i) => (
-                    <li key={i} className={e.located ? "" : "text-red-600"}>
-                      <span className="mr-1 rounded bg-white px-1 text-[10px] text-ink-400">{KIND_KO[e.kind]}</span>
-                      {e.source === "rule" && (
-                        <span className="mr-1 rounded bg-sky-100 px-1 text-[10px] text-sky-700" title="규칙 기반 검사">
-                          규칙
-                        </span>
-                      )}
-                      <span className="line-through">{e.quote}</span> → <span className="font-semibold text-sprite-700">{e.correction}</span>
-                      {!e.located && " (답안에서 찾을 수 없음)"}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {shown.criteria.map((c) => (
-              <div key={c.key}>
-                <div className="font-semibold">
-                  {c.nameKo} ({c.name}) — {c.score}/5
-                </div>
-                <ul className="ml-4 list-disc text-ink-600">
-                  {c.evidence.map((q, i) => (
-                    <li key={i}>“{q}”</li>
-                  ))}
-                </ul>
-                <div>{c.comment}</div>
-              </div>
-            ))}
-            <div className="border-t border-black/10 pt-2">
-              <span className="font-semibold">총평 </span>
-              {shown.overallFeedback}
+          <div className="mt-3 grid gap-4">
+            <div className="rounded-xl bg-white p-4 shadow-sm">
+              <AnnotatedResponse text={SAMPLE_RESPONSE} errors={shown.errors} />
             </div>
+            <FeedbackView evaluation={shown} />
           </div>
         </details>
       )}

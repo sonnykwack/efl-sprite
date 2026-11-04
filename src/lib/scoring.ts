@@ -575,16 +575,26 @@ export async function evaluateOnce(
 export async function evaluateResponse(
   task: ScorableTask,
   response: string,
-  opts: { modelId: string; lang?: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; samples?: number },
+  opts: {
+    modelId: string;
+    lang?: FeedbackLang;
+    stats?: SpeakingStats;
+    version?: PromptVersion;
+    samples?: number;
+    onProgress?: (stage: "loading" | "scoring" | "translating") => void;
+  },
 ): Promise<LlmEvaluation> {
   const n = Math.max(1, opts.samples ?? 3);
   // Start (or reuse) the server ONCE, then send all samples concurrently: llama-server runs
   // them in parallel slots (--parallel 3), which on a GPU costs far less than 3× one run.
+  opts.onProgress?.("loading");
   await api.llmStart(opts.modelId);
+  opts.onProgress?.("scoring");
   const wall0 = performance.now();
   const runs = await Promise.all(Array.from({ length: n }, () => evaluateOnce(task, response, opts)));
   let result = { ...combineSamples(runs), latencyMs: Math.round(performance.now() - wall0) };
   if ((opts.version ?? DEFAULT_PROMPT_VERSION) !== "v1" && (opts.lang ?? "ko") === "ko") {
+    opts.onProgress?.("translating");
     const t0 = performance.now();
     result = await translateToKorean(result);
     result = { ...result, latencyMs: result.latencyMs + Math.round(performance.now() - t0) };

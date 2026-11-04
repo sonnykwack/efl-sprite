@@ -66,3 +66,65 @@ export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
+
+export interface Student {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
+export interface NewAttempt {
+  taskId: number;
+  studentId: number | null;
+  responseText: string;
+  audioPath: string | null;
+  durationSeconds: number | null;
+}
+
+export interface NewEvaluation {
+  attemptId: number;
+  modelId: string;
+  /** JSON-encoded LlmEvaluation (or RepeatEvaluation for listen_repeat). */
+  rubricJson: string;
+  totalScore: number | null;
+  feedback: string | null;
+  latencyMs: number | null;
+}
+
+export interface EvaluationRow {
+  id: number;
+  modelId: string;
+  rubricJson: string;
+  totalScore: number | null;
+  sampleAnswer: string | null;
+  teacherScore: number | null;
+  latencyMs: number | null;
+  createdAt: string;
+}
+
+export interface AttemptDetail {
+  id: number;
+  taskId: number;
+  taskTitle: string;
+  section: Section;
+  taskType: TaskType;
+  prompt: string;
+  material: string | null;
+  studentId: number | null;
+  studentName: string | null;
+  responseText: string;
+  audioPath: string | null;
+  durationSeconds: number | null;
+  createdAt: string;
+  evaluation: EvaluationRow | null;
+}
+
+export interface AttemptSummary {
+  id: number;
+  createdAt: string;
+  studentName: string | null;
+  taskTitle: string;
+  taskType: TaskType;
+  band: number | null;
+  teacherScore: number | null;
+}

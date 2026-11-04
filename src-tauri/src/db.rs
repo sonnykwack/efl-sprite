@@ -106,6 +106,13 @@ pub fn open(app: &AppHandle) -> Result<Db, String> {
     Ok(Db(Mutex::new(conn)))
 }
 
+/// Fresh, fully migrated schema for unit tests in other modules.
+#[cfg(test)]
+pub fn migrate_for_test(conn: &mut Connection) {
+    conn.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+    migrate(conn).unwrap();
+}
+
 fn migrate(conn: &mut Connection) -> Result<(), String> {
     let current: usize = conn
         .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))

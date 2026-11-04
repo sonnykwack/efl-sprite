@@ -4,10 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppInfo,
+  AttemptDetail,
+  AttemptSummary,
   ChatMessage,
   DownloadProgress,
   ModelEntry,
+  NewAttempt,
+  NewEvaluation,
   NewTask,
+  Student,
   Task,
 } from "./types";
 
@@ -33,6 +38,19 @@ export const api = {
   listTasks: () => invoke<Task[]>("list_tasks"),
   createTask: (task: NewTask) => invoke<number>("create_task", { task }),
   deleteTask: (id: number) => invoke<void>("delete_task", { id }),
+
+  // Students · attempts · evaluations
+  listStudents: () => invoke<Student[]>("list_students"),
+  createStudent: (name: string) => invoke<number>("create_student", { name }),
+  createAttempt: (attempt: NewAttempt) => invoke<number>("create_attempt", { attempt }),
+  createEvaluation: (evaluation: NewEvaluation) => invoke<number>("create_evaluation", { evaluation }),
+  setSampleAnswer: (evaluationId: number, text: string) =>
+    invoke<void>("set_sample_answer", { evaluationId, text }),
+  setTeacherScore: (evaluationId: number, score: number | null) =>
+    invoke<void>("set_teacher_score", { evaluationId, score }),
+  getAttempt: (id: number) => invoke<AttemptDetail>("get_attempt", { id }),
+  listAttempts: (studentId?: number | null, limit?: number) =>
+    invoke<AttemptSummary[]>("list_attempts", { studentId: studentId ?? null, limit: limit ?? null }),
 };
 
 /** True when running inside the Tauri shell (false in a plain browser via `npm run dev`). */

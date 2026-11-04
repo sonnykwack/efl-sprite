@@ -2,6 +2,7 @@ mod db;
 mod engine;
 mod models;
 mod paths;
+mod records;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, RunEvent};
@@ -61,6 +62,14 @@ pub fn run() {
             db::list_tasks,
             db::create_task,
             db::delete_task,
+            records::list_students,
+            records::create_student,
+            records::create_attempt,
+            records::create_evaluation,
+            records::set_sample_answer,
+            records::set_teacher_score,
+            records::get_attempt,
+            records::list_attempts,
         ])
         .build(tauri::generate_context!())
         .expect("error while building EFL Sprite")
