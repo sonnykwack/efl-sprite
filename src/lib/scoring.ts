@@ -74,6 +74,9 @@ export interface LanguageError {
   located: boolean;
   /** Who found it: the LLM or a deterministic rule (src/lib/rules.ts). */
   source: "llm" | "rule";
+  /** Character span in the response (−1 if not located) — used to dedupe and order items. */
+  start: number;
+  end: number;
 }
 
 export interface ResponseAnalysis {
@@ -153,7 +156,9 @@ export function evaluationSchema(criteria: Criterion[], version: PromptVersion =
         additionalProperties: false,
       },
       minItems: 0,
-      maxItems: typed ? 8 : 6,
+      // v3: rules now cover fragments/register/vague words, so 6 LLM items are enough and
+      // the shorter output is noticeably faster.
+      maxItems: 6,
     };
   }
   if (version === "v3") {
@@ -294,7 +299,7 @@ export function buildEvaluationMessages(
       `You are an experienced, fair rater of English ${spec.section} responses for TOEFL iBT-style practice (task: ${spec.label}).`,
       "Only the text inside <student_response> is the student's work. Quote ONLY from it.",
       "Work in this order:",
-      "1. errors: up to 8 items, most important first. `kind` = grammar | sentence | word_choice | register; `quote` = exact words from <student_response> (2–10 words); `correction` = the improved words. Never list text that cannot be improved.",
+      "1. errors: up to 6 items, most important first. `kind` = grammar | sentence | word_choice | register; `quote` = exact words from <student_response> (2–10 words); `correction` = the improved words. Never list text that cannot be improved.",
       ERROR_CHECKLIST,
       "2. analysis — read before you judge:",
       "   main_point: the student's position or purpose in one sentence.",
@@ -382,7 +387,7 @@ export function parseEvaluation(
       score,
     };
   });
-  const errors: LanguageError[] = (Array.isArray(data.errors) ? data.errors : [])
+  const llmErrors: LanguageError[] = (Array.isArray(data.errors) ? data.errors : [])
     .map((e) => e as { kind?: unknown; quote?: unknown; correction?: unknown })
     .map((e) => ({
       kind: (["grammar", "sentence", "word_choice", "register"].includes(String(e.kind)) ? String(e.kind) : "grammar") as ErrorKind,
@@ -400,25 +405,25 @@ export function parseEvaluation(
         grounded: occursIn(e.quote, response),
         located: snap.found,
         source: "llm",
+        start: snap.start,
+        end: snap.end,
       };
     })
     // After snapping, a "correction" equal to the original text is not a correction.
-    .filter((e) => normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "))
-    // The same span listed twice (3B did "hard → harder" ×3).
-    .filter((e, i, all) => all.findIndex((x) => normalizeWords(x.quote).join(" ") === normalizeWords(e.quote).join(" ")) === i);
+    .filter((e) => normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "));
 
-  // Hybrid: deterministic rules (v2+) for what the LLM reliably misses.
-  if (meta.version !== "v1") {
-    for (const r of detectRuleIssues(response)) {
-      const rq = normalizeWords(r.quote).join(" ");
-      // Prefer the rule's exact span over an overlapping LLM item.
-      for (let i = errors.length - 1; i >= 0; i--) {
-        const lq = normalizeWords(errors[i].quote).join(" ");
-        if (lq.includes(rq) || rq.includes(lq)) errors.splice(i, 1);
-      }
-      errors.push({ kind: r.kind, quote: r.quote, correction: r.correction, grounded: true, located: true, source: "rule" });
-    }
-  }
+  // Hybrid (v2+): deterministic rules for what the LLM reliably misses.
+  const rules: LanguageError[] =
+    meta.version === "v1"
+      ? []
+      : detectRuleIssues(response).map((r) => {
+          const snap = snapQuote(r.quote, response, 0.99);
+          // A fragment quote starts with the previous sentence's last words purely as
+          // context; the error itself begins at "Because …".
+          const ctx = r.rule === "fragment" && snap.start >= 0 ? r.quote.indexOf(". ") + 2 : 0;
+          return { kind: r.kind, quote: r.quote, correction: r.correction, grounded: true, located: true, source: "rule", start: snap.start + ctx, end: snap.end };
+        });
+  const errors = mergeCorrections(rules, llmErrors);
   const a = data.analysis as { main_point?: unknown; support_given?: unknown; not_addressed?: unknown } | undefined;
   const analysis: ResponseAnalysis | null = a
     ? {
@@ -440,6 +445,39 @@ export function parseEvaluation(
       raw,
     },
   );
+}
+
+/**
+ * Two items describe the same problem if they overlap by ≥ 60% of the shorter span.
+ * Merely touching (sharing one word, e.g. "so she" and "she … more easy examples") is not
+ * a duplicate — both corrections are useful.
+ */
+const overlaps = (a: LanguageError, b: LanguageError) => {
+  if (a.start < 0 || b.start < 0) return false;
+  const shared = Math.min(a.end, b.end) - Math.max(a.start, b.start);
+  const shorter = Math.min(a.end - a.start, b.end - b.start);
+  return shared > 0 && shorter > 0 && shared / shorter >= 0.6;
+};
+
+/**
+ * One item per place in the text. Rules are accepted first (exact, deterministic); then LLM
+ * items from most to least specific (shortest span first), skipping any that overlap an
+ * accepted item — so "students is understanding" survives but a whole-sentence rewrite that
+ * also covers the rule-detected fragment does not. Result is in reading order.
+ */
+export function mergeCorrections(rules: LanguageError[], llm: LanguageError[]): LanguageError[] {
+  const accepted: LanguageError[] = [];
+  for (const r of rules) if (!accepted.some((a) => overlaps(a, r))) accepted.push(r);
+  const bySpecificity = [...llm].sort((a, b) => (a.end - a.start) - (b.end - b.start));
+  for (const e of bySpecificity) {
+    if (e.start < 0) {
+      // Unlocatable quote: keep it (flagged red in the UI) unless it duplicates text already listed.
+      if (!accepted.some((a) => normalizeWords(a.quote).join(" ") === normalizeWords(e.quote).join(" "))) accepted.push(e);
+      continue;
+    }
+    if (!accepted.some((a) => overlaps(a, e))) accepted.push(e);
+  }
+  return accepted.sort((a, b) => (a.start < 0 ? 1e9 : a.start) - (b.start < 0 ? 1e9 : b.start));
 }
 
 function finalize(e: Omit<LlmEvaluation, "total" | "max" | "band">): LlmEvaluation {

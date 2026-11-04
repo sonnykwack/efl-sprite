@@ -26,7 +26,10 @@ Text: `src/components/ScoringLab.tsx` (`SAMPLE_TASK`, `SAMPLE_RESPONSE`).
 |---|---|---|---|---|---|---|---|---|---|
 | v3 | ko | 3.33 ± 0.47 | 3.00 ± 0.00 | 2.33 ± 0.47 | 3.83 | **3.5** | 6.7 | 57% | 42.2 |
 
-Total for 3 sequential samples + translation: 3B-v3 63.6 s, 7B-v3 140.0 s.
+| v3 + rules + snap, parallel ×3 | ko | 3.00 ± 0.00 | 3.00 ± 0.00 | 3.00 ± 0.00 | 4.00 | 4.0 | 13.7 (dupes) | 67% → 96% | 74 (parallel) |
+
+Total for 3 samples + translation: 3B-v3 63.6 s, 7B-v3 140.0 s (sequential), 7B hybrid 92.8 s
+(parallel, −34%).
 
 ### Observations
 - v1: ~1 band below the teacher; comments generic or wrong (told the student to use
@@ -57,6 +60,21 @@ Total for 3 sequential samples + translation: 3B-v3 63.6 s, 7B-v3 140.0 s.
   corrected form) recovered as "students is understanding".
 - llama-server `--parallel 3`: the 3 samples run concurrently.
 - Per-model prompt (catalog `prompt`): 3B → v2, 7B → v3. 7B is now the recommended model.
+
+### Hybrid run (2026-11-04, 7B)
+- Zero variance (SD 0 on all criteria). All five teacher points now covered (fragment, "so",
+  "thing", "some" by rules; shallow reasoning by the LLM analysis).
+- Grounding 67% raw → 96% after snapping.
+- Band 4.0 vs teacher 3.0–3.5. Criterion scores (3/3/3) look reasonable; the linear
+  total→band map is probably too generous. NOT re-fitted on one sample — calibrate the
+  mapping on the held-out teacher-scored set (Day 10).
+- Parallel slots: per-request time 42 s → 74 s, total 140 s → 93 s.
+- Issues fixed afterwards: duplicate corrections (LLM whole-sentence rewrite + rule on the
+  same "Because" fragment) → span-based merge (rules first, then most specific LLM item,
+  ≥ 60% overlap = duplicate, reading order); snapped quotes spilling into the next sentence
+  ("… students face. Also") → trimmed; LLM corrections capped at 6. Replay of this run:
+  12 distinct corrections, none duplicated.
+- Given SD 0, a single sample may be enough for 7B: plan "quick (1×)" vs "precise (3×)".
 
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for

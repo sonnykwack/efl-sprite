@@ -31,6 +31,25 @@ export interface SnapResult {
   /** True if the quote already matched exactly. */
   exact: boolean;
   found: boolean;
+  /** Character span in the response (−1 if not found). */
+  start: number;
+  end: number;
+}
+
+/**
+ * A window can spill over a sentence boundary ("… students face. Also"). Drop a dangling
+ * piece of ≤ 2 words at either end so quotes read as clean phrases.
+ */
+function trimToSentence(text: string, start: number): { text: string; start: number } {
+  const parts = text.split(/(?<=[.!?])\s+/);
+  if (parts.length < 2) return { text, start };
+  let first = 0;
+  let last = parts.length - 1;
+  if (parts[last].split(/\s+/).length <= 2) last--;
+  if (first < last && parts[first].split(/\s+/).length <= 2) first++;
+  const kept = parts.slice(first, last + 1).join(" ");
+  const offset = text.indexOf(parts[first]);
+  return { text: kept, start: start + Math.max(offset, 0) };
 }
 
 /**
@@ -40,7 +59,8 @@ export interface SnapResult {
 export function snapQuote(quote: string, response: string, threshold = 0.6): SnapResult {
   const q = normalizeWords(quote);
   const toks = tokenize(response);
-  if (q.length === 0 || toks.length === 0) return { text: quote, similarity: 0, exact: false, found: false };
+  const none = (similarity: number): SnapResult => ({ text: quote, similarity, exact: false, found: false, start: -1, end: -1 });
+  if (q.length === 0 || toks.length === 0) return none(0);
 
   let best = { sim: 0, i: 0, len: 0 };
   const minLen = Math.max(1, q.length - 2);
@@ -55,7 +75,8 @@ export function snapQuote(quote: string, response: string, threshold = 0.6): Sna
     }
     if (best.sim === 1) break;
   }
-  if (best.sim < threshold) return { text: quote, similarity: best.sim, exact: false, found: false };
-  const text = response.slice(toks[best.i].start, toks[best.i + best.len - 1].end);
-  return { text, similarity: best.sim, exact: best.sim === 1, found: true };
+  if (best.sim < threshold) return none(best.sim);
+  const raw = response.slice(toks[best.i].start, toks[best.i + best.len - 1].end);
+  const t = trimToSentence(raw, toks[best.i].start);
+  return { text: t.text, similarity: best.sim, exact: best.sim === 1, found: true, start: t.start, end: t.start + t.text.length };
 }
