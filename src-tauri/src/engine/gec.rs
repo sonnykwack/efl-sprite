@@ -194,6 +194,17 @@ pub fn apply_labels(
         let t = &toks[i];
         let label = labels.get(i).map(String::as_str).unwrap_or("$KEEP");
         let is_start = i == 0 && t.text == "$START";
+        // Guard (not in the reference): a word already rewritten in an earlier round is not
+        // rewritten again. Seen 2026-11-06: "It start" → "starts" (round 1) → "started"
+        // (round 2), which then pulled "can" → "could"; the explanation kept round 1's label.
+        let rewrite = |l: &str| l.starts_with("$REPLACE_") || l.starts_with("$TRANSFORM_");
+        let label = if rewrite(label)
+            && t.origin.and_then(|o| touched.get(&o)).map_or(false, |ls| ls.iter().any(|l| rewrite(l)))
+        {
+            "$KEEP"
+        } else {
+            label
+        };
         if !unchanged(label) {
             if let Some(a) = anchor(i) {
                 touched.entry(a).or_default().push(label.to_string());
@@ -677,6 +688,23 @@ mod tests {
         let out = apply_labels(&toks, &labels, decode, &mut touched);
         let sentence = detokenize(&out.iter().filter(|t| t.text != "$START").map(|t| t.text.clone()).collect::<Vec<_>>());
         (extract_edits(text, &words, &out, &touched), sentence)
+    }
+
+    #[test]
+    fn a_word_is_not_rewritten_twice_across_rounds() {
+        let decode = load_verb_decode("start_starts:VB_VBZ\nstarts_started:VBZ_VBD\n");
+        let sent = ["It", "start", "early", "."];
+        let mut toks: Vec<Tok> = std::iter::once(Tok { text: "$START".into(), origin: None })
+            .chain(sent.iter().enumerate().map(|(i, w)| Tok { text: w.to_string(), origin: Some(i) }))
+            .collect();
+        let mut touched = HashMap::new();
+        let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        toks = apply_labels(&toks, &l(&["$KEEP", "$KEEP", "$TRANSFORM_VERB_VB_VBZ", "$KEEP", "$KEEP"]), &decode, &mut touched);
+        toks = apply_labels(&toks, &l(&["$KEEP", "$KEEP", "$TRANSFORM_VERB_VBZ_VBD", "$APPEND_very", "$KEEP"]), &decode, &mut touched);
+        let out: Vec<&str> = toks.iter().map(|t| t.text.as_str()).collect();
+        // second rewrite of "start" refused; other edits in the same round still apply
+        assert_eq!(out, ["$START", "It", "starts", "early", "very", "."]);
+        assert_eq!(touched[&1], ["$TRANSFORM_VERB_VB_VBZ"]);
     }
 
     #[test]

@@ -750,7 +750,16 @@ export function mergeCorrections(rules: LanguageError[], llm: LanguageError[], g
   const accepted: LanguageError[] = [];
   for (const r of rules) if (!accepted.some((a) => overlaps(a, r))) accepted.push(r);
   // Grammar model next: trained on learner errors, exact spans, category decided by its tag.
-  for (const g of gec) if (!accepted.some((a) => duplicates(a, g))) accepted.push(g);
+  // A rule that rewrites a whole phrase ("I want answer quickly" → "I would appreciate a reply
+  // …") supersedes a grammar-model edit inside it whose words the rewrite no longer contains
+  // ("want → want to", which also misreads "want answer" as a missing infinitive).
+  const superseded = (g: LanguageError) =>
+    rules.some((r) => {
+      if (r.start < 0 || g.start < r.start || g.end > r.end) return false;
+      const kept = new Set(normalizeWords(r.correction));
+      return !normalizeWords(g.quote).every((w) => kept.has(w));
+    });
+  for (const g of gec) if (!superseded(g) && !accepted.some((a) => duplicates(a, g))) accepted.push(g);
   const bySpecificity = [...llm].sort((a, b) => (a.end - a.start) - (b.end - b.start));
   for (const e of bySpecificity) {
     if (e.start < 0) {

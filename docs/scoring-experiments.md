@@ -186,6 +186,17 @@ Email 1-B 13/15 → 4.5, Email 2-A Language capped → ≈ 4.0.
 - Expected on this response: 3 items removed by category, "essay → paper" judged by the
   verifier. To measure: false items per correct response, and recall on Email 2-B.
 
+## Email 2-B after precision-first (2026-11-06)
+- 8 items, no invented ones: 3 tone rules (greeting, "Please + verb", "I want answer"),
+  grammar model: start, can, maybe, in (the), want (to).
+- Two grammar-model problems: (1) "It start" → "starts" in round 1, then "started" in round 2,
+  which pulled "can" → "could"; the explanation kept round 1's agreement label. Fix
+  (gec.rs): a word rewritten in an earlier round is not rewritten again. (2) "want → want to"
+  inside the rule's full rewrite of "I want answer quickly" (and a misreading: the student
+  meant "an answer"). Fix (merge): a rule rewrite supersedes grammar-model edits inside it
+  whose words the rewrite no longer contains; "in → in the" inside "Please stop … in morning"
+  is kept.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).
