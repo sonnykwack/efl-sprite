@@ -38,9 +38,10 @@ export function tidyLlmCorrection(
 ): Tidied | null {
   if (e.start < 0) return null;
   // Same tokenizer on both sides, so "a.m." splits the same way in quote and correction.
-  const toks = tokenize(response.slice(e.start, e.end)).map((t) => ({ ...t, start: t.start + e.start, end: t.end + e.start }));
+  let toks = tokenize(response.slice(e.start, e.end)).map((t) => ({ ...t, start: t.start + e.start, end: t.end + e.start }));
   const ctoks = tokenize(e.correction);
   if (toks.length === 0 || ctoks.length === 0) return null;
+  toks = extendToCorrection(response, toks, ctoks.map((t) => t.norm));
   const qn = toks.map((t) => t.norm);
   const cn = ctoks.map((t) => t.norm);
   let p = 0;
@@ -71,6 +72,39 @@ export function tidyLlmCorrection(
   else if (category === "article" || category === "preposition") category = "word_choice";
   const correction = e.correction.slice(ctoks[ca].start, ctoks[cb - 1].end);
   return { start, end, quote, correction, category };
+}
+
+type Tok = ReturnType<typeof tokenize>[number];
+
+/**
+ * The snapped quote is sometimes SHORTER than what the correction rewrites (seen 2026-11-06:
+ * quote "match", correction "match their interests, and" while the response continues
+ * "match their interests, such as …"). Trimming then marks "match" as the error and shows the
+ * following words as insertions. Extend the span over the next words of the same sentence by
+ * the amount that best aligns with the correction, so the real change ("such" → "and") is
+ * what gets underlined. Exported for tests.
+ */
+export function extendToCorrection(response: string, toks: Tok[], corr: string[]): Tok[] {
+  const extra = corr.length - toks.length;
+  if (extra <= 0) return toks;
+  const last = toks[toks.length - 1];
+  const after = tokenize(response.slice(last.end)).map((t) => ({ ...t, start: t.start + last.end, end: t.end + last.end }));
+  const next: Tok[] = [];
+  let prevEnd = last.end;
+  for (const t of after) {
+    if (next.length >= extra + 2 || /[.!?]/.test(response.slice(prevEnd, t.start))) break;
+    next.push(t);
+    prevEnd = t.end;
+  }
+  const cost = (k: number) =>
+    alignWords([...toks, ...next.slice(0, k)].map((t) => t.norm), corr).filter((o) => o.op !== "ok").length;
+  let best = 0;
+  let bestCost = cost(0);
+  for (let k = 1; k <= next.length; k++) {
+    const c = cost(k);
+    if (c < bestCost) [best, bestCost] = [k, c];
+  }
+  return best ? [...toks, ...next.slice(0, best)] : toks;
 }
 
 /** Category priority when adjacent grammar-model edits are shown as one. */
