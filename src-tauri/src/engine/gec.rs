@@ -309,8 +309,15 @@ pub fn extract_edits(text: &str, words: &[Word], final_toks: &[Tok], touched: &H
             i += 1;
             continue;
         }
+        // One edit per changed word, so each gets its own category and explanation
+        // ("go to" → "went to the" = verb form + article, two edits). Words are joined only
+        // when a $MERGE_ tag consumed the next word ("every one" → "everyone").
         let a = i;
-        while i < words.len() && changed[i] {
+        i += 1;
+        while i < words.len()
+            && changed[i]
+            && touched.get(&i).map_or(false, |ls| ls.iter().any(|l| l.starts_with("$MERGE_")))
+        {
             i += 1;
         }
         let b = i - 1;
@@ -691,12 +698,20 @@ mod tests {
         assert_eq!(pairs, [("pay", "pay a"), ("in", "in the"), ("the", "")]);
         assert_eq!(edits[0].labels, ["$APPEND_a"]);
 
+        // adjacent errors stay separate edits
+        let decode2 = load_verb_decode("go_went:VB_VBD\n");
+        //                      $START  I       go                        to            library   .
+        let (edits, s) = run("I go to library.", &["$KEEP", "$KEEP", "$TRANSFORM_VERB_VB_VBD", "$APPEND_the", "$KEEP", "$KEEP"], &decode2);
+        assert_eq!(s, "I went to the library.");
+        let pairs: Vec<(&str, &str)> = edits.iter().map(|e| (e.original.as_str(), e.corrected.as_str())).collect();
+        assert_eq!(pairs, [("go", "went"), ("to", "to the")]);
+
         // insertion at the very start ($START + APPEND) and noun number
         //                      $START          students  is              .
         let (edits, s) = run("students is.", &["$APPEND_The", "$KEEP", "$REPLACE_are", "$KEEP"], &decode);
         assert_eq!(s, "The students are.");
         let pairs: Vec<(&str, &str)> = edits.iter().map(|e| (e.original.as_str(), e.corrected.as_str())).collect();
-        assert_eq!(pairs, [("students is", "The students are")]);
+        assert_eq!(pairs, [("students", "The students"), ("is", "are")]);
     }
 
     #[test]

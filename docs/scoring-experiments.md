@@ -104,7 +104,13 @@ Chosen: GECToR (letheviet/gector-roberta-base-5k-onnx, MIT; gotutiyan/gector por
 - Tags → taxonomy by code (`gecMap.ts`); fixed Korean reasons; LLM keeps tone/word choice.
 - Verified here: tokenizer/tag/edit logic unit tests; full ONNX Runtime 1.31.1 path with a
   synthetic GECToR-shaped model (caught a repeated-insertion bug: "pay a a a" → guard added).
-- To measure on the Mac: Settings → 문법 모델 테스트 (latency, edits), then ES-1 re-scoring.
+- First real run (MacBook Pro, CPU, 2026-11-06): generic 3-sentence learner sample with 7
+  planted errors → **7/7 found**, plus a real missing article ("to library" → "to the library"),
+  0 wrong corrections; 905 ms incl. model load. "don't → didn't" (past, given "Yesterday")
+  instead of the planted "doesn't" — grammatical. Fixes after: label-width mismatch
+  (output wider than config id2label), adjacent edits split per word, "two book → books"
+  explained as plural (GECToR uses VB→VBZ for noun -s).
+- To measure next: ES-1 re-scoring with v4 + grammar model.
 
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for

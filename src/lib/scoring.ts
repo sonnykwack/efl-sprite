@@ -564,7 +564,7 @@ export function parseEvaluation(
           };
         });
   const gecErrors: LanguageError[] = (meta.gec ?? []).map((g) => {
-    const m = mapGecEdit(g);
+    const m = mapGecEdit(g, response);
     const span = displaySpan(response, g);
     return {
       kind: KIND_OF(m.category),

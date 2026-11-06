@@ -74,7 +74,7 @@ export default function GecLab({ gec, runtime }: { gec?: ModelEntry; runtime: bo
             {edits.length}개 교정 · {ms}ms
           </div>
           {edits.map((e, i) => {
-            const m = mapGecEdit(e);
+            const m = mapGecEdit(e, text);
             const span = displaySpan(text, e);
             return (
               <div key={i} className="rounded-lg bg-sprite-50 px-2 py-1">

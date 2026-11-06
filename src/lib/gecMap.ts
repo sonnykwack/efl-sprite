@@ -39,11 +39,32 @@ function mainLabel(labels: string[]): string {
   return labels.find((l) => !l.startsWith("$TRANSFORM_CASE")) ?? labels[0] ?? "";
 }
 
-export function mapGecEdit(e: GecEdit): MappedGec {
+/** Words after which a noun must be plural ("two book" → "two books"). */
+const PLURAL_CUES = new Set([
+  "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "many", "several",
+  "few", "these", "those", "both", "various", "numerous", "multiple", "some", "all", "most",
+]);
+
+/** The word just before `start` in the response (lower-case), if any. */
+function prevWord(response: string | undefined, start: number): string {
+  if (!response) return "";
+  const m = /([A-Za-z0-9']+)\W*$/.exec(response.slice(0, start));
+  return m ? m[1].toLowerCase() : "";
+}
+
+/**
+ * `response` gives context: GECToR uses the verb transform VB→VBZ (+s) for nouns too, so
+ * "two book → books" would otherwise be explained as subject–verb agreement.
+ */
+export function mapGecEdit(e: GecEdit, response?: string): MappedGec {
   const label = mainLabel(e.labels);
   const o = e.original.trim();
   const c = e.corrected.trim();
   const arrow = `${o || "(없음)"} → ${c || "(삭제)"}`;
+  const before = prevWord(response, e.start);
+  if ((label === "$TRANSFORM_VERB_VB_VBZ" || label === "$TRANSFORM_AGREEMENT_PLURAL") && (PLURAL_CUES.has(before) || /^\d+$/.test(before))) {
+    return { category: "plural", why: `앞에 '${before}'가 있어서 명사를 복수형으로 써야 해요: ${arrow}` };
+  }
 
   if (label.startsWith("$APPEND_")) {
     const w = label.slice("$APPEND_".length);
