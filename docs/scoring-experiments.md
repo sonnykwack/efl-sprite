@@ -112,6 +112,20 @@ Chosen: GECToR (letheviet/gector-roberta-base-5k-onnx, MIT; gotutiyan/gector por
   explained as plural (GECToR uses VB→VBZ for noun -s).
 - To measure next: ES-1 re-scoring with v4 + grammar model.
 
+## Korean feedback quality (2026-11-06)
+- Teacher: scores now at the intended level, but feedback unnatural — "반응은 …" and Chinese
+  output ("반응은 가난한人们的翻译结果：[") repeated in several fields.
+- Causes: Qwen drifts into Chinese when unstable; literal "the response" → 반응; one long
+  JSON-array translation call degenerated and the broken string filled several slots; no
+  output validation.
+- Fix (`src/lib/translate.ts`): charset grammar (Hangul + ASCII without `"`/`\` + curly
+  quotes) — checked with llama.cpp's own json-schema-to-grammar converter; one call per text,
+  concurrent; glossary (response → 답안) + 2 examples; validation (CJK/kana, Hangul ratio,
+  meta-talk, length, duplicate outputs) with retry, then English fallback; deterministic
+  반응 → 답안 post-fix; scorer told to address the student ("You …"), never "the response".
+- Offline: the observed garbage, an English echo and meta-talk are rejected; a model that
+  always returns garbage yields English originals, never broken text.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).

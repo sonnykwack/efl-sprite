@@ -243,6 +243,12 @@ export default function FeedbackView({
         ))}
       </section>
 
+      {(ev.untranslated ?? 0) > 0 && (
+        <p className="-mb-2 text-xs text-ink-400">
+          피드백 {ev.untranslated}개는 번역 품질 검사를 통과하지 못해 영어 원문으로 보여요.
+        </p>
+      )}
+
       <section className="rounded-xl bg-white p-4 shadow-sm">
         <div className="mb-2 font-semibold">총평</div>
         <p className="text-sm" data-selectable>

@@ -45,6 +45,7 @@ import {
 import { displaySpan, mapGecEdit } from "./gecMap";
 import { detectRuleIssues } from "./rules";
 import { snapQuote } from "./snap";
+import { translateMany } from "./translate";
 import { SCALE_MAX, TASK_SPECS, toBand, type Criterion } from "./rubrics";
 import type { ChatMessage, GecEdit, TaskType } from "./types";
 
@@ -122,6 +123,8 @@ export interface LlmEvaluation {
   /** v4: human-readable (Korean) reasons for score caps that were applied. */
   caps: string[];
   wordCount: number;
+  /** Feedback texts left in English because translation failed validation. */
+  untranslated?: number;
   overallFeedback: string;
   total: number;
   max: number;
@@ -399,7 +402,7 @@ export function buildEvaluationMessages(
       "   Scores must agree with your analysis.",
       "4. overall_feedback: the main strength, then the single most useful thing to work on (two or three sentences).",
       "Use the FULL scale. A very short, incomplete or impolite response belongs at 0–2, not 3. Reserve 5 for responses like the strong example.",
-      "Address the student as 'you'. Write in clear, simple English.",
+      "Talk to the student directly ('You …', 'Your example …'). Never write 'the response', 'the student' or 'the writer'. Write short, clear, simple English sentences (they will be translated into Korean).",
       "",
       SCALE_V2,
       "",
@@ -749,41 +752,22 @@ export function combineSamples(samples: LlmEvaluation[]): LlmEvaluation {
 
 /** Translate comments + overall feedback to Korean in one constrained call (v2). */
 export async function translateToKorean(e: LlmEvaluation): Promise<LlmEvaluation> {
-  // Rule reasons are already Korean; only the model's English "why" lines need translating.
+  // Rule and grammar-model reasons are already Korean; only the LLM's English texts are sent.
+  // One call per text, validated (see translate.ts) — failures fall back to English.
   const whyIdx = e.errors.map((x, i) => (x.source === "llm" && x.why ? i : -1)).filter((i) => i >= 0);
   const texts = [...e.criteria.map((c) => c.comment), e.overallFeedback, ...whyIdx.map((i) => e.errors[i].why)];
-  const raw = await api.llmChat(
-    [
-      {
-        role: "system",
-        content:
-          "Translate each English feedback text for a Korean high-school or university student into natural, polite Korean (해요체). " +
-          "Translate the meaning, not word by word (e.g. 'drifts off topic' → '주제에서 벗어나요', 'add a new idea' → '새로운 의견을 더하다'). " +
-          "Keep quoted English words and corrections in English inside quotation marks. Return the translations in the same order.",
-      },
-      { role: "user", content: JSON.stringify(texts) },
-    ],
-    {
-      type: "object",
-      properties: {
-        ko: { type: "array", items: { type: "string", maxLength: 500 }, minItems: texts.length, maxItems: texts.length },
-      },
-      required: ["ko"],
-      additionalProperties: false,
-    },
-  );
-  const ko: string[] = JSON.parse(raw).ko ?? [];
-  if (ko.length !== texts.length) return e;
+  const ko = await translateMany(texts);
   const n = e.criteria.length;
   const errors = [...e.errors];
   whyIdx.forEach((errIdx, k) => {
-    errors[errIdx] = { ...errors[errIdx], why: ko[n + 1 + k] || errors[errIdx].why };
+    errors[errIdx] = { ...errors[errIdx], why: ko[n + 1 + k].text };
   });
   return {
     ...e,
-    criteria: e.criteria.map((c, i) => ({ ...c, comment: ko[i] || c.comment })),
-    overallFeedback: ko[n] || e.overallFeedback,
+    criteria: e.criteria.map((c, i) => ({ ...c, comment: ko[i].text })),
+    overallFeedback: ko[n].text,
     errors,
+    untranslated: ko.filter((t) => !t.ok).length,
   };
 }
 

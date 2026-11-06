@@ -85,6 +85,9 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
 - Production scoring = `evaluateResponse(..., samples: 3)` → samples sent concurrently
   (llama-server `--parallel 3`, 3 × 8192 ctx) → per-criterion median (`combineSamples`).
 - Feedback language: Korean by default (`lang: "ko"`), evidence stays verbatim English.
+  Translation = `src/lib/translate.ts`: one call per text, `KO_PATTERN` charset grammar (no
+  `"`/`\` — pattern strings are emitted raw), glossary, validation + English fallback. Never
+  translate many texts in one JSON array (it degenerated into Chinese in the field).
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.
 
