@@ -88,6 +88,11 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
   Translation = `src/lib/translate.ts`: one call per text, `KO_PATTERN` charset grammar (no
   `"`/`\` — pattern strings are emitted raw), glossary, validation + English fallback. Never
   translate many texts in one JSON array (it degenerated into Chinese in the field).
+- Email required points: `points.ts`, one call per point (quote → status), reconciled in code,
+  run concurrently with the scoring samples; caps are applied AFTER the median
+  (`finishWithCaps`). Extra caps: email tone hits (`rules.ts` TONE), grammar errors per 100
+  words from GEC/rules (never LLM items). `tidy.ts` narrows/filters LLM corrections and joins
+  adjacent GEC edits. BAND_MAP refit 1 on ES-1 (2 → 2.0, 4 → 4.0).
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.
 

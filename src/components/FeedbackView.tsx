@@ -201,7 +201,11 @@ export default function FeedbackView({
             {ev.points.map((p, i) => (
               <li key={i} className="flex gap-2">
                 <span className={`w-10 shrink-0 font-semibold ${POINT_COLOR[p.status]}`}>{POINT_KO[p.status]}</span>
-                <span data-selectable>{p.point}</span>
+                <span data-selectable>
+                  {p.pointKo ?? p.point}
+                  {p.pointKo && <span className="ml-1.5 text-xs text-ink-400">{p.point}</span>}
+                  {p.evidence && <span className="mt-0.5 block text-xs text-ink-600">근거: “{p.evidence}”</span>}
+                </span>
               </li>
             ))}
           </ul>

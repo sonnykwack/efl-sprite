@@ -79,8 +79,52 @@ function isFragment(sentence: string, subordinator: string): boolean {
   return PREPOSITIONS.test(rest.slice(0, comma).trim());
 }
 
+/**
+ * Email register: demanding or blunt phrasing toward the recipient. ES-1 Email 2-B ("Hello
+ * manager. … Please stop the construction … I want answer quickly.") got Organization & Tone
+ * 4/5 from the 7B model; the teacher's main complaint was exactly this tone. Each hit is a
+ * fact we can show, and their number caps the tone score (applyCaps).
+ */
+const TONE: { re: RegExp; rule: string; why: string; correction: (m: string) => string }[] = [
+  {
+    re: /^(?:Hello|Hi|Hey)[ ,]+(?:manager|sir|madam|teacher|professor|staff)\b[.,!]?/i,
+    rule: "tone-greeting",
+    why: "직함만 부르는 인사는 어색하고 무례하게 들릴 수 있어요. 공식 이메일은 'Dear + 직함/이름,'으로 시작해요.",
+    correction: (m) => `Dear ${m.replace(/^(?:Hello|Hi|Hey)[ ,]+/i, "").replace(/[.,!]$/, "").replace(/^\w/, (c) => c.toUpperCase())},`,
+  },
+  {
+    re: /\bI want (?:an? |the |your )?(?:answer|reply|response|refund|discount|solution|explanation)\b(?: (?:quickly|fast|soon|now|immediately))?/i,
+    rule: "tone-want",
+    why: "'I want …'은 요구하는 느낌이 강해요. 이메일에서는 'I would appreciate …'나 'Could you …?'처럼 정중하게 요청해요.",
+    correction: () => "I would appreciate a reply at your earliest convenience",
+  },
+  {
+    re: /\byou (?:must|have to|need to) /i,
+    rule: "tone-must",
+    why: "상대에게 'must / have to'로 지시하면 명령처럼 들려요. 'Could you please …?'로 부탁해 보세요.",
+    correction: () => "could you please ",
+  },
+  {
+    re: /(?:^|[.!?]\s+)(Please (?!let me know|find|see)\w+[^.!?]*)[.!]/,
+    rule: "tone-please",
+    why: "'Please + 동사' 명령문은 이메일에서 지시처럼 들릴 수 있어요. 'Could you please …?'나 'I would like to ask if …'로 바꾸면 더 정중해요.",
+    correction: (m) => `Could you please ${m.replace(/^Please\s+/, "").replace(/[.!]$/, "")}?`,
+  },
+];
+
+export function detectToneIssues(response: string): RuleIssue[] {
+  const out: RuleIssue[] = [];
+  for (const t of TONE) {
+    const m = response.trim().match(t.re);
+    if (!m) continue;
+    const quote = (m[1] ?? m[0]).trim();
+    out.push({ kind: "register", category: "register", why: t.why, quote, correction: t.correction(quote), rule: t.rule });
+  }
+  return out;
+}
+
 /** Run all rules over a written response (or a speaking transcript). */
-export function detectRuleIssues(response: string): RuleIssue[] {
+export function detectRuleIssues(response: string, taskType?: string): RuleIssue[] {
   const out: RuleIssue[] = [];
   const sents = sentences(response);
 
@@ -128,5 +172,6 @@ export function detectRuleIssues(response: string): RuleIssue[] {
     if (/thing/i.test(m[0]) && out.some((o) => o.rule === "vague" && /thing/i.test(o.quote))) continue;
     out.push({ kind: "word_choice", category: "word_choice", why: `'${m[0]}'은(는) 뜻이 막연해요. 무엇을 가리키는지 구체적인 단어로 바꾸면 더 정확해져요.`, quote: m[0], correction: matchCase(m[0], v.correction(m[0])), rule: "vague" });
   }
+  if (taskType === "email") out.push(...detectToneIssues(response));
   return out;
 }

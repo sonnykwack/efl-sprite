@@ -131,6 +131,8 @@ export interface AttemptSummary {
   taskType: TaskType;
   band: number | null;
   teacherScore: number | null;
+  /** Criterion scores of the latest evaluation (rubric order). */
+  criterionScores: number[] | null;
 }
 
 /** One correction from the grammar model, in UTF-16 offsets of the response text. */

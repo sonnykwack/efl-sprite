@@ -8,8 +8,8 @@
 import type { ErrorCategory } from "./grammarGuide";
 import type { GecEdit } from "./types";
 
-const ARTICLES = new Set(["a", "an", "the"]);
-const PREPOSITIONS = new Set([
+export const ARTICLES = new Set(["a", "an", "the"]);
+export const PREPOSITIONS = new Set([
   "in", "on", "at", "to", "for", "of", "with", "by", "from", "about", "into", "onto", "during",
   "until", "since", "over", "under", "between", "among", "through", "toward", "towards",
   "without", "within", "after", "before", "like", "as", "upon", "across", "against", "around",

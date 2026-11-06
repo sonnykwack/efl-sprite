@@ -191,13 +191,18 @@ export const TASK_TYPES_BY_SECTION: Record<Section, TaskType[]> = {
  * email: AI 4.0 vs intended ~2). This table follows the rubric wording (3 = "adequate" ≈
  * band 3.5) and agrees with the AD-1 teacher score. Re-fit it on the teacher's blind ES-1
  * scores (docs/sample-set.md) — keep it a table so refitting only changes numbers.
+ *
+ * Refit 1 (2026-11-06, ES-1, 8 teacher bands): Academic Discussion matched exactly (4/4);
+ * all errors were emails, AI high by +0.5…+1.5. Teacher's best answers sit at 4.0 and the weak
+ * email at 1.5, so the ends were moved: 2 → 2.0 (was 2.5), 4 → 4.0 (was 4.5). Every AD result
+ * keeps its band under the new table (their means were 2.67–3.67). Still provisional.
  */
 export const BAND_MAP: [score: number, band: number][] = [
   [0, 1.0],
   [1, 1.5],
-  [2, 2.5],
+  [2, 2.0],
   [3, 3.5],
-  [4, 4.5],
+  [4, 4.0],
   [5, 6.0],
 ];
 

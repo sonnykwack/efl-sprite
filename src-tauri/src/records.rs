@@ -138,6 +138,15 @@ pub struct AttemptSummary {
     pub task_type: String,
     pub band: Option<f64>,
     pub teacher_score: Option<f64>,
+    /// Per-criterion scores of the latest evaluation (for refitting the band table).
+    pub criterion_scores: Option<Vec<f64>>,
+}
+
+/// `criteria[].score` from a stored evaluation JSON; None if it has no criteria.
+fn criterion_scores(rubric_json: Option<String>) -> Option<Vec<f64>> {
+    let v: serde_json::Value = serde_json::from_str(&rubric_json?).ok()?;
+    let xs: Vec<f64> = v.get("criteria")?.as_array()?.iter().filter_map(|c| c.get("score")?.as_f64()).collect();
+    if xs.is_empty() { None } else { Some(xs) }
 }
 
 fn latest_evaluation(conn: &Connection, attempt_id: i64) -> R<Option<EvaluationRow>> {
@@ -202,7 +211,8 @@ pub fn attempts(conn: &Connection, student_id: Option<i64>, limit: i64) -> R<Vec
         .prepare(
             "SELECT a.id, a.created_at, s.name, t.title, t.task_type, \
                     (SELECT total_score FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1), \
-                    (SELECT teacher_score FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1) \
+                    (SELECT teacher_score FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1), \
+                    (SELECT rubric_json FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1) \
              FROM attempts a JOIN tasks t ON t.id = a.task_id LEFT JOIN students s ON s.id = a.student_id \
              WHERE (?1 IS NULL OR a.student_id = ?1) \
              ORDER BY a.id DESC LIMIT ?2",
@@ -218,6 +228,7 @@ pub fn attempts(conn: &Connection, student_id: Option<i64>, limit: i64) -> R<Vec
                 task_type: r.get(4)?,
                 band: r.get(5)?,
                 teacher_score: r.get(6)?,
+                criterion_scores: criterion_scores(r.get(7)?),
             })
         })
         .map_err(e)?;
@@ -325,5 +336,14 @@ mod tests {
         assert_eq!(attempts(&conn, Some(sid), 10).unwrap()[0].band, Some(3.5));
         assert!(attempts(&conn, Some(sid + 99), 10).unwrap().is_empty());
         assert!(attempt(&conn, 999).is_err());
+        assert_eq!(attempts(&conn, None, 10).unwrap()[0].criterion_scores, None, "an empty object has no criteria");
+    }
+
+    #[test]
+    fn criterion_scores_from_stored_json() {
+        let j = r#"{"criteria":[{"key":"task","score":2},{"key":"tone","score":4},{"key":"language","score":2}],"band":3}"#;
+        assert_eq!(criterion_scores(Some(j.into())), Some(vec![2.0, 4.0, 2.0]));
+        assert_eq!(criterion_scores(Some("not json".into())), None);
+        assert_eq!(criterion_scores(None), None);
     }
 }

@@ -42,8 +42,10 @@ import {
   type ErrorCategory,
   type ErrorKind,
 } from "./grammarGuide";
-import { displaySpan, mapGecEdit } from "./gecMap";
-import { detectRuleIssues } from "./rules";
+import { displaySpan } from "./gecMap";
+import { checkRequiredPoints } from "./points";
+import { detectRuleIssues, detectToneIssues } from "./rules";
+import { joinAdjacentGec, mapJoinedGec, tidyLlmCorrection } from "./tidy";
 import { snapQuote } from "./snap";
 import { translateMany } from "./translate";
 import { SCALE_MAX, TASK_SPECS, toBand, type Criterion } from "./rubrics";
@@ -104,6 +106,12 @@ export interface LanguageError {
 export interface RequiredPoint {
   point: string;
   status: "covered" | "partial" | "missing";
+  /** The email's own sentence that addresses the point (separate check, points.ts). */
+  evidence?: string;
+  /** Korean translation of `point` for display. */
+  pointKo?: string;
+  /** The check call failed — treated as covered, never capped. */
+  failed?: boolean;
 }
 
 export interface ResponseAnalysis {
@@ -396,7 +404,7 @@ export function buildEvaluationMessages(
       "   support_given: each reason or example the student actually gives (one short line each). A personal story with details IS a specific example.",
       "   not_addressed: what the task asks for that is missing, ideas only repeated from <classmates_posts>, and reasons that are stated but not explained.",
       points.length
-        ? `   required_points: for EACH of these ${points.length} required points, in order, say covered / partial / missing: ${points.map((p, i) => `(${i + 1}) ${p}`).join(" ")}`
+        ? `   The email must do ${points.length} things: ${points.map((p, i) => `(${i + 1}) ${p}`).join(" ")}. Mention in not_addressed any that is missing or too thin. A question like 'Could you tell me when …?' counts as asking.`
         : "",
       `3. For each criterion: evidence (1–3 phrases copied exactly from <student_response>), comment (mention specific content from THIS response and how to improve; never copy rubric wording), score (integer 0–${SCALE_MAX}).`,
       "   Scores must agree with your analysis.",
@@ -486,7 +494,7 @@ export function parseEvaluation(
   raw: string,
   task: ScorableTask,
   response: string,
-  meta: { latencyMs: number; modelId: string; version: PromptVersion; gec?: GecEdit[] },
+  meta: { latencyMs: number; modelId: string; version: PromptVersion; gec?: GecEdit[]; caps?: boolean },
 ): LlmEvaluation {
   const spec = TASK_SPECS[task.taskType];
   let data: Record<string, unknown>;
@@ -542,13 +550,20 @@ export function parseEvaluation(
       };
     })
     // After snapping, a "correction" equal to the original text is not a correction.
-    .filter((e) => normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "));
+    .filter((e) => normalizeWords(e.quote).join(" ") !== normalizeWords(e.correction).join(" "))
+    // Narrow to the changed words, fix article/preposition categories, drop multi-sentence
+    // spans and (when the grammar model ran) pure deletions — see tidy.ts.
+    .flatMap((e): LanguageError[] => {
+      if (!e.located) return [e];
+      const t = tidyLlmCorrection(response, e, { gecRan: meta.gec != null });
+      return t ? [{ ...e, ...t, kind: KIND_OF(t.category) }] : [];
+    });
 
   // Hybrid (v2+): deterministic rules for what the LLM reliably misses.
   const rules: LanguageError[] =
     meta.version === "v1"
       ? []
-      : detectRuleIssues(response).map((r) => {
+      : detectRuleIssues(response, task.taskType).map((r) => {
           const snap = snapQuote(r.quote, response, 0.99);
           // A fragment quote starts with the previous sentence's last words purely as
           // context; the error itself begins at "Because …".
@@ -566,8 +581,8 @@ export function parseEvaluation(
             end: snap.end,
           };
         });
-  const gecErrors: LanguageError[] = (meta.gec ?? []).map((g) => {
-    const m = mapGecEdit(g, response);
+  const gecErrors: LanguageError[] = joinAdjacentGec(meta.gec ?? [], response).map((g) => {
+    const m = mapJoinedGec(g, response);
     const span = displaySpan(response, g);
     return {
       kind: KIND_OF(m.category),
@@ -604,7 +619,7 @@ export function parseEvaluation(
       : null;
 
   const wordCount = normalizeWords(response).length;
-  const caps = meta.version === "v4" ? applyCaps(criteria, task, wordCount, points) : [];
+  const caps = meta.version === "v4" && meta.caps !== false ? applyCaps(criteria, task, wordCount, points, { response, errors }) : [];
 
   return finalize(
     {
@@ -629,6 +644,10 @@ export function parseEvaluation(
  * every criterion; length and required-point coverage are facts we can check ourselves.
  *  - words < 50% of the task minimum → content criteria ≤ 1;  < 80% → ≤ 2
  *  - email: missing required points (partial = ½) ≥ 2 → task ≤ 2; ≥ 1 → ≤ 3; ½ → ≤ 4
+ *  - email: demanding-tone phrases (rules.ts TONE) ≥ 2 → tone ≤ 2; 1 → ≤ 3
+ *  - writing: grammar errors found by the grammar model / rules (not the LLM) per 100 words
+ *    ≥ 8 → language ≤ 2; ≥ 4 → ≤ 3   (ES-1: the 7B gave error-heavy emails Language 3–4)
+ * Thresholds are provisional (ES-1, 8 teacher scores) — refit with more teacher data.
  * Mutates `criteria` (keeps the model's score in `uncapped`) and returns Korean reasons.
  */
 export function applyCaps(
@@ -636,6 +655,7 @@ export function applyCaps(
   task: ScorableTask,
   wordCount: number,
   points: RequiredPoint[] | null,
+  ctx: { response?: string; errors?: LanguageError[] } = {},
 ): string[] {
   const spec = TASK_SPECS[task.taskType];
   const reasons: string[] = [];
@@ -662,6 +682,23 @@ export function applyCaps(
     if (max != null) {
       cap("task", max);
       reasons.push(`요구사항 ${points.length}개 중 일부를 다루지 않음 → 과제 수행 최대 ${max}점`);
+    }
+  }
+  if (task.taskType === "email" && ctx.response) {
+    const hits = detectToneIssues(ctx.response).length;
+    const max = hits >= 2 ? 2 : hits === 1 ? 3 : null;
+    if (max != null) {
+      cap("tone", max);
+      reasons.push(`요구·명령조 표현 ${hits}개 → 구성 · 어조 최대 ${max}점`);
+    }
+  }
+  if (spec.section === "writing" && ctx.errors && wordCount >= 20) {
+    const n = ctx.errors.filter((e) => e.source !== "llm" && (e.kind === "grammar" || e.kind === "sentence")).length;
+    const per100 = (n / wordCount) * 100;
+    const max = per100 >= 8 ? 2 : per100 >= 4 ? 3 : null;
+    if (max != null) {
+      cap("language", max);
+      reasons.push(`문법 오류 ${n}개 (100단어당 ${per100.toFixed(1)}개) → 언어 사용 최대 ${max}점`);
     }
   }
   return reasons;
@@ -755,29 +792,42 @@ export async function translateToKorean(e: LlmEvaluation): Promise<LlmEvaluation
   // Rule and grammar-model reasons are already Korean; only the LLM's English texts are sent.
   // One call per text, validated (see translate.ts) — failures fall back to English.
   const whyIdx = e.errors.map((x, i) => (x.source === "llm" && x.why ? i : -1)).filter((i) => i >= 0);
-  const texts = [...e.criteria.map((c) => c.comment), e.overallFeedback, ...whyIdx.map((i) => e.errors[i].why)];
+  const pts = e.points ?? [];
+  const texts = [...e.criteria.map((c) => c.comment), e.overallFeedback, ...whyIdx.map((i) => e.errors[i].why), ...pts.map((p) => p.point)];
   const ko = await translateMany(texts);
   const n = e.criteria.length;
   const errors = [...e.errors];
   whyIdx.forEach((errIdx, k) => {
     errors[errIdx] = { ...errors[errIdx], why: ko[n + 1 + k].text };
   });
+  const p0 = n + 1 + whyIdx.length;
   return {
     ...e,
+    points: e.points ? e.points.map((p, k) => ({ ...p, pointKo: ko[p0 + k].ok ? ko[p0 + k].text : undefined })) : null,
     criteria: e.criteria.map((c, i) => ({ ...c, comment: ko[i].text })),
     overallFeedback: ko[n].text,
     errors,
-    untranslated: ko.filter((t) => !t.ok).length,
+    untranslated: ko.slice(0, p0).filter((t) => !t.ok).length,
   };
 }
 
 // ------------------------------------------------------------------ entry points
 
+/**
+ * Apply caps to a combined result. Capping after the median equals the median of capped
+ * samples (min is monotonic), and lets the separate required-point check feed in.
+ */
+export function finishWithCaps(e: LlmEvaluation, task: ScorableTask, response: string, points: RequiredPoint[] | null): LlmEvaluation {
+  const criteria = e.criteria.map((c) => ({ ...c, uncapped: undefined }));
+  const caps = e.version === "v4" ? applyCaps(criteria, task, e.wordCount, points, { response, errors: e.errors }) : [];
+  return finalize({ ...e, criteria, caps, points: points ?? e.points });
+}
+
 /** One LLM sample (no translation, no combining). Exposed for the scoring lab. */
 export async function evaluateOnce(
   task: ScorableTask,
   response: string,
-  opts: { modelId: string; lang?: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; gec?: GecEdit[] },
+  opts: { modelId: string; lang?: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; gec?: GecEdit[]; caps?: boolean },
 ): Promise<LlmEvaluation> {
   const spec = TASK_SPECS[task.taskType];
   if (spec.scoring !== "llm") throw new Error(`${spec.label} is not LLM-scored`);
@@ -785,9 +835,10 @@ export async function evaluateOnce(
   await api.llmStart(opts.modelId);
   const messages = buildEvaluationMessages(task, response, { lang: opts.lang ?? "ko", stats: opts.stats, version, gec: opts.gec });
   const t0 = performance.now();
-  const nPoints = task.taskType === "email" ? requiredPoints(task.prompt).length : 0;
-  const raw = await api.llmChat(messages, evaluationSchema(spec.criteria, version, { requiredPoints: nPoints }));
+  // Required points are checked separately (points.ts), not inside this long JSON.
+  const raw = await api.llmChat(messages, evaluationSchema(spec.criteria, version));
   return parseEvaluation(raw, task, response, {
+    caps: opts.caps,
     gec: opts.gec,
     latencyMs: Math.round(performance.now() - t0),
     modelId: opts.modelId,
@@ -819,8 +870,13 @@ export async function evaluateResponse(
   await api.llmStart(opts.modelId);
   opts.onProgress?.("scoring");
   const wall0 = performance.now();
-  const runs = await Promise.all(Array.from({ length: n }, () => evaluateOnce(task, response, opts)));
-  let result = { ...combineSamples(runs), latencyMs: Math.round(performance.now() - wall0) };
+  const version = opts.version ?? DEFAULT_PROMPT_VERSION;
+  const bullets = version === "v4" && task.taskType === "email" ? requiredPoints(task.prompt) : [];
+  const [runs, points] = await Promise.all([
+    Promise.all(Array.from({ length: n }, () => evaluateOnce(task, response, { ...opts, caps: false }))),
+    bullets.length ? checkRequiredPoints(task.prompt, response, bullets) : Promise.resolve(null),
+  ]);
+  let result = { ...finishWithCaps(combineSamples(runs), task, response, points), latencyMs: Math.round(performance.now() - wall0) };
   if ((opts.version ?? DEFAULT_PROMPT_VERSION) !== "v1" && (opts.lang ?? "ko") === "ko") {
     opts.onProgress?.("translating");
     const t0 = performance.now();

@@ -57,7 +57,7 @@ const SCHEMA = {
 const CJK_OR_KANA = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/;
 
 /** Remove quoted spans so English inside quotes does not count against the Hangul ratio. */
-const withoutQuotes = (s: string) => s.replace(/(['"‘“])[^'"’”]*(['"’”])/g, " ");
+const withoutQuotes = (s: string) => s.replace(/(^|[^A-Za-z])['"‘“][^'"’”]*['"’”](?![A-Za-z])/g, "$1 ");
 
 export function isGoodKorean(source: string, ko: string): boolean {
   const t = ko.trim();
@@ -70,8 +70,42 @@ export function isGoodKorean(source: string, ko: string): boolean {
   if (hangul < latin * 0.5) return false; // mostly untranslated English
   // A translation far shorter than its source has lost content.
   if (t.length < Math.min(source.length * 0.25, 40)) return false;
+  // Copied a worked example instead of translating (seen: a grammar note came back as the
+  // second example's "답안에 통계 수업이라는 구체적인 예시가 …").
+  if (EXAMPLES.some(([en, ko]) => en !== source && similar(ko, t))) return false;
+  // English kept verbatim: quoted English in the source must survive, and every English word
+  // in the output must come from the source (seen: 'NIGHT에' for "at night").
+  for (const q of quotedEnglish(source)) if (!t.includes(q)) return false;
+  const srcWords = new Set(source.match(/[A-Za-z][A-Za-z']*/g) ?? []);
+  for (const w of t.match(/[A-Za-z][A-Za-z']*/g) ?? []) if (!srcWords.has(w)) return false;
   return true;
 }
+
+/** English phrases inside quotes in the source ('study room', "a.m."). */
+function quotedEnglish(source: string): string[] {
+  // An opening quote must not follow a letter, so apostrophes ("don't", "it's") are not quotes.
+  return [...source.matchAll(/(?:^|[^A-Za-z])['"‘“]([^'"’”]*[A-Za-z][^'"’”]*)['"’”](?![A-Za-z])/g)]
+    .map((m) => m[1].trim())
+    .filter(Boolean);
+}
+
+/** Character-bigram overlap (Dice) ≥ 0.6. */
+function similar(a: string, b: string): boolean {
+  const grams = (s: string) => {
+    const t = s.replace(/\s+/g, "");
+    const m = new Map<string, number>();
+    for (let i = 0; i < t.length - 1; i++) m.set(t.slice(i, i + 2), (m.get(t.slice(i, i + 2)) ?? 0) + 1);
+    return m;
+  };
+  const x = grams(a), y = grams(b);
+  let shared = 0, total = 0;
+  for (const [g, n] of x) { shared += Math.min(n, y.get(g) ?? 0); total += n; }
+  for (const n of y.values()) total += n;
+  return total > 0 && (2 * shared) / total >= 0.6;
+}
+
+/** 합니다체 endings — the first attempt is retried in 해요체; the strict attempt may keep them. */
+const FORMAL = /(습니다|입니다|됩니다|합니다|십시오)[.!?]?(\s|$)/;
 
 /** Deterministic fix for the one glossary mistake small models keep making. */
 export function postFix(source: string, ko: string): string {
@@ -87,7 +121,9 @@ function messages(text: string, strict: boolean): ChatMessage[] {
   }
   msgs.push({
     role: "user",
-    content: strict ? `${text}\n\n(Translate this sentence only. Korean Hangul only, 해요체.)` : text,
+    content: strict
+      ? `${text}\n\n(Translate this text only — do not reuse the examples. Korean Hangul, 해요체 endings (-요). Keep English words in quotes exactly as written.)`
+      : text,
   });
   return msgs;
 }
@@ -114,7 +150,7 @@ export async function translateOne(text: string): Promise<Translated> {
   for (const strict of [false, true]) {
     try {
       const ko = postFix(text, await callOnce(text, strict, withPattern));
-      if (isGoodKorean(text, ko)) return { text: ko, ok: true };
+      if (isGoodKorean(text, ko) && (strict || !FORMAL.test(ko))) return { text: ko, ok: true };
     } catch (e) {
       if (withPattern) {
         withPattern = false;

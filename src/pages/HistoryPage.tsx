@@ -73,6 +73,7 @@ export default function HistoryPage({ navigate }: { navigate: Navigate }) {
               <th className="px-4 py-2">날짜</th>
               <th className="px-4 py-2">학생</th>
               <th className="px-4 py-2">문제</th>
+              <th className="px-4 py-2 text-right">항목 점수</th>
               <th className="px-4 py-2 text-right">AI 밴드</th>
               <th className="px-4 py-2 text-right">교사</th>
             </tr>
@@ -80,7 +81,7 @@ export default function HistoryPage({ navigate }: { navigate: Navigate }) {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-ink-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-400">
                   아직 응시 기록이 없어요.
                 </td>
               </tr>
@@ -96,6 +97,9 @@ export default function HistoryPage({ navigate }: { navigate: Navigate }) {
                 <td className="px-4 py-2">
                   <span className="mr-2 text-[11px] text-sprite-600">{TASK_SPECS[r.taskType]?.label}</span>
                   {r.taskTitle}
+                </td>
+                <td className="px-4 py-2 text-right text-xs text-ink-600 tabular-nums">
+                  {r.criterionScores ? `${r.criterionScores.join(" · ")} (${r.criterionScores.reduce((a, b) => a + b, 0)})` : "—"}
                 </td>
                 <td className="px-4 py-2 text-right font-semibold">{r.band != null ? r.band.toFixed(1) : <span className="text-ink-400">미채점</span>}</td>
                 <td className="px-4 py-2 text-right">{r.teacherScore != null ? r.teacherScore.toFixed(1) : "—"}</td>

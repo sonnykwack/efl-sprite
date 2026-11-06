@@ -126,6 +126,50 @@ Chosen: GECToR (letheviet/gector-roberta-base-5k-onnx, MIT; gotutiyan/gector por
 - Offline: the observed garbage, an English echo and meta-talk are rejected; a model that
   always returns garbage yields English originals, never broken text.
 
+## ES-1 teacher scores, first comparison (2026-11-06, 7B v4 + GECToR, quick 1×)
+| Task | AI | Teacher | Diff |
+|---|---|---|---|
+| Email 1 (strong, "Hi Mark") | 4.0 | 4.0 | 0 — but only because a FALSE "missing point" cap cut Task 5 → 3 |
+| Email 1 (weak) | 4.0 | 3.5 | +0.5 |
+| Email 2-A (polite, some errors) | 5.0 | 4.0 | +1.0 |
+| Email 2-B (55 words, demanding) | 3.0 | 1.5 | +1.5 |
+| AD 2 ×2, AD 3 ×2 | 3.5, 3.5, 4.0, 3.0 | same | 0 (4/4 exact) |
+MAE 0.38, within ±0.5 75%, bias +0.38. All misses are emails.
+
+Teacher notes: the model does not reliably tell whether a required point is in the email;
+some corrections are incomprehensible (two-sentence quote + "주 건물 앞에 연구실을 추가하여…").
+
+Causes found:
+- Point coverage was one small field inside the long scoring JSON, judged without quoting.
+  "ask about the next meeting" → missing despite "Could you let me know when the next meeting
+  is scheduled?".
+- 7B gave Organization & Tone 4/5 to "Hello manager. … I want answer quickly." and Language 3–4
+  to error-heavy emails.
+- Corrections: LLM quotes spanning sentences; deletions of correct words ("again",
+  "at night"); categories not matching the edit; grammar-model edits on adjacent words split
+  ("is → has", "a → been" explained as an article); translations that copied a few-shot
+  example or capitalised English words ("NIGHT에"); 합니다체 mixed in.
+
+Changes:
+- `points.ts`: one focused call per required point, schema quote → status, code reconciles the
+  verdict with the quote (a real quoted sentence is never "missing"; a failed call never caps).
+- Caps: email demanding-tone phrases (rules.ts TONE: "Hello manager", "I want answer",
+  "you must", "Please + verb." orders) ≥ 2 → tone ≤ 2, 1 → ≤ 3; writing grammar errors from
+  GEC/rules per 100 words ≥ 8 → language ≤ 2, ≥ 4 → ≤ 3. Caps applied after the median.
+- `tidy.ts`: LLM corrections narrowed to the changed words (+1 context word), multi-sentence
+  spans dropped, pure deletions dropped when GEC ran, article/preposition categories
+  recomputed from the aligned diff; adjacent GEC replacements joined ("is a → has been",
+  verb form).
+- Translation validation: reject copies of a worked example, missing quoted English, English
+  words not in the source; first attempt must be 해요체.
+- BAND_MAP refit 1: 2 → 2.0, 4 → 4.0 (AD bands unchanged; their means were 2.67–3.67).
+- History shows per-criterion scores, so the next refit can use totals, not only bands.
+
+Offline checks: the four bad corrections from the screenshot are dropped or narrowed
+("have same" → "have the same", article); Email 2-B gets 3 tone hits, Email 1-B / 2-A none;
+quoted sentence + "missing" → partial. Expected (not yet measured): Email 2-B 6/15 → 2.0,
+Email 1-B 13/15 → 4.5, Email 2-A Language capped → ≈ 4.0.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).
