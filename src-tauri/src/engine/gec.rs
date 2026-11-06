@@ -505,27 +505,45 @@ impl Gec {
         }
         let ids_t = ort::value::Tensor::from_array((vec![1i64, n as i64], ids)).map_err(|e| e.to_string())?;
         let mask_t = ort::value::Tensor::from_array((vec![1i64, n as i64], mask)).map_err(|e| e.to_string())?;
-        let n_labels = self.id2label.len();
         let outputs = self
             .session
             .run(ort::inputs![self.input_ids_name.as_str() => ids_t, self.attention_name.as_str() => mask_t])
             .map_err(|e| format!("GEC 추론 실패: {e}"))?;
-        // Identify outputs by their last dimension: n_labels → tag logits, 3 → detection.
-        let mut lab: Option<Vec<f32>> = None;
+        // Identify outputs by their last dimension. Tag logits = the widest float output
+        // (it can differ from config's id2label count by special labels such as <PAD>, so
+        // do not require an exact match); detection logits = a float output of width 2–4.
+        let mut lab: Option<(Vec<f32>, usize)> = None;
         let mut det: Option<(Vec<f32>, usize)> = None;
-        for (_, v) in outputs.iter() {
-            if let Ok((shape, data)) = v.try_extract_tensor::<f32>() {
-                let last = *shape.last().unwrap_or(&0) as usize;
-                if last == n_labels {
-                    lab = Some(data.to_vec());
-                } else if last > 0 && last <= 4 {
-                    det = Some((data.to_vec(), last));
+        let mut seen = Vec::new();
+        for (name, v) in outputs.iter() {
+            match v.try_extract_tensor::<f32>() {
+                Ok((shape, data)) => {
+                    let last = *shape.last().unwrap_or(&0) as usize;
+                    seen.push(format!("{name}: f32 {:?}", &shape[..]));
+                    if data.len() != n * last.max(1) {
+                        continue; // not [1, n, k]
+                    }
+                    if last > 4 && lab.as_ref().map_or(true, |(_, w)| last > *w) {
+                        lab = Some((data.to_vec(), last));
+                    } else if (2..=4).contains(&last) {
+                        det = Some((data.to_vec(), last));
+                    }
                 }
+                Err(_) => seen.push(format!("{name}: {:?} (not f32)", v.dtype())),
             }
         }
-        let lab = lab.ok_or("model output with label logits not found")?;
-        let (det, n_d) = det.unwrap_or_else(|| (vec![0.0, 1.0, 0.0].repeat(n), 3)); // no detector → no sentence threshold
-        let picked = choose_labels(&lab, &det, n_labels, n_d, &first, self.keep_id, 1, keep_conf, min_err);
+        let (lab, n_labels) = lab.ok_or_else(|| {
+            format!(
+                "label logits output not found (sequence length {n}, {} labels in config). Model outputs: {}",
+                self.id2label.len(),
+                seen.join("; ")
+            )
+        })?;
+        // No detector head → no sentence-level threshold (incorrect prob = 1).
+        let (det, n_d) = det.unwrap_or_else(|| ([0.0f32, 1.0, 0.0].repeat(n), 3));
+        // Labels beyond config's id2label (e.g. <PAD>) map to $KEEP below.
+        let keep_id = self.keep_id.min(n_labels - 1);
+        let picked = choose_labels(&lab, &det, n_labels, n_d, &first, keep_id, 1, keep_conf, min_err);
         Ok(picked.into_iter().map(|i| self.id2label.get(i).cloned().unwrap_or_else(|| "$KEEP".into())).collect())
     }
 
