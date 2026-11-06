@@ -19,10 +19,19 @@ const CATALOG_JSON: &str = include_str!("../catalog/models.json");
 #[serde(rename_all = "camelCase")]
 pub struct CatalogEntry {
     pub id: String,
-    pub kind: String, // "whisper" | "llm"
+    pub kind: String, // "whisper" | "llm" | "gec"
     pub name: String,
+    /// Single-file models: the file name. Multi-file models: the directory name.
     pub file: String,
+    /// Single-file models only (empty for multi-file).
+    #[serde(default)]
     pub url: String,
+    /// Multi-file models (e.g. ONNX + tokenizer + config): downloaded into `models/<file>/`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<CatalogFile>,
+    /// License / attribution shown in Settings (required for some models).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
     pub size_mb: u32,
     pub min_vram_gb: u32,
     pub recommended: bool,
@@ -30,6 +39,18 @@ pub struct CatalogEntry {
     /// LLM only: scoring prompt version measured to work best with this model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogFile {
+    pub name: String,
+    pub url: String,
+}
+
+impl CatalogEntry {
+    fn is_multi(&self) -> bool {
+        !self.files.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,10 +87,20 @@ pub fn model_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     Ok(paths::models_dir(app)?.join(m.file))
 }
 
-/// Path of an installed model, or a clear error if it is not downloaded yet.
+fn is_installed(m: &CatalogEntry, path: &std::path::Path) -> bool {
+    if m.is_multi() {
+        m.files.iter().all(|f| path.join(&f.name).is_file())
+    } else {
+        path.is_file()
+    }
+}
+
+/// Path of an installed model (file, or directory for multi-file models), or a clear
+/// error if it is not downloaded yet.
 pub fn installed_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
-    let p = model_path(app, id)?;
-    if p.is_file() {
+    let m = find(id)?;
+    let p = paths::models_dir(app)?.join(&m.file);
+    if is_installed(&m, &p) {
         Ok(p)
     } else {
         Err(format!("모델이 설치되지 않았습니다: {id}"))
@@ -82,7 +113,7 @@ pub fn list_models(app: AppHandle) -> Result<Vec<ModelEntry>, String> {
     Ok(catalog()
         .into_iter()
         .map(|entry| {
-            let installed = dir.join(&entry.file).is_file();
+            let installed = is_installed(&entry, &dir.join(&entry.file));
             ModelEntry { entry, installed }
         })
         .collect())
@@ -134,24 +165,56 @@ pub async fn download_model(app: AppHandle, downloads: State<'_, Downloads>, id:
 
 async fn download_inner(app: &AppHandle, id: &str) -> Result<(), String> {
     let m = find(id)?;
-    let final_path = model_path(app, id)?;
-    // Download to `<file>.part`, then rename: a crash never leaves a truncated model
-    // that looks "installed".
-    let part_path = final_path.with_extension(format!(
-        "{}.part",
-        final_path.extension().and_then(|e| e.to_str()).unwrap_or("bin")
-    ));
-
-    let resp = reqwest::Client::builder()
+    let client = reqwest::Client::builder()
         .user_agent(concat!("EFL-Sprite/", env!("CARGO_PKG_VERSION")))
         .build()
-        .map_err(|e| e.to_string())?
-        .get(&m.url)
+        .map_err(|e| e.to_string())?;
+    let target = model_path(app, id)?;
+
+    let jobs: Vec<(String, PathBuf)> = if m.is_multi() {
+        tokio::fs::create_dir_all(&target).await.map_err(|e| e.to_string())?;
+        m.files.iter().map(|f| (f.url.clone(), target.join(&f.name))).collect()
+    } else {
+        vec![(m.url.clone(), target.clone())]
+    };
+    // Multi-file: report progress against the catalog's total size estimate.
+    let estimate = if m.is_multi() { Some(m.size_mb as u64 * 1024 * 1024) } else { None };
+
+    let mut base: u64 = 0;
+    for (url, path) in jobs {
+        if m.is_multi() && path.is_file() {
+            continue; // resume: files finished in an earlier attempt
+        }
+        base += download_file(app, id, &client, &url, &path, base, estimate).await?;
+    }
+    let _ = app.emit(
+        "model-download-progress",
+        Progress { id, downloaded: base, total: estimate.or(Some(base)), done: true, error: None },
+    );
+    Ok(())
+}
+
+/// Download one file to `<path>.part`, then rename — a crash never leaves a truncated file
+/// that looks installed. Returns the number of bytes written.
+async fn download_file(
+    app: &AppHandle,
+    id: &str,
+    client: &reqwest::Client,
+    url: &str,
+    final_path: &std::path::Path,
+    base: u64,
+    estimate: Option<u64>,
+) -> Result<u64, String> {
+    let file_name = final_path.file_name().and_then(|n| n.to_str()).unwrap_or("model");
+    let part_path = final_path.with_file_name(format!("{file_name}.part"));
+
+    let resp = client
+        .get(url)
         .send()
         .await
-        .map_err(|e| format!("download failed: {e}"))?
+        .map_err(|e| format!("download failed ({file_name}): {e}"))?
         .error_for_status()
-        .map_err(|e| format!("download failed: {e}"))?;
+        .map_err(|e| format!("download failed ({file_name}): {e}"))?;
 
     let total = resp.content_length();
     let mut file = tokio::fs::File::create(&part_path)
@@ -170,7 +233,7 @@ async fn download_inner(app: &AppHandle, id: &str) -> Result<(), String> {
             last_emit = downloaded;
             let _ = app.emit(
                 "model-download-progress",
-                Progress { id, downloaded, total, done: false, error: None },
+                Progress { id, downloaded: base + downloaded, total: estimate.or(total), done: false, error: None },
             );
         }
     }
@@ -181,29 +244,26 @@ async fn download_inner(app: &AppHandle, id: &str) -> Result<(), String> {
     if let Some(t) = total {
         if downloaded != t {
             let _ = tokio::fs::remove_file(&part_path).await;
-            return Err(format!("incomplete download: {downloaded}/{t} bytes"));
+            return Err(format!("incomplete download ({file_name}): {downloaded}/{t} bytes"));
         }
     }
     // Windows `rename` fails if the target exists; remove first.
     if final_path.exists() {
-        tokio::fs::remove_file(&final_path).await.map_err(|e| e.to_string())?;
+        tokio::fs::remove_file(final_path).await.map_err(|e| e.to_string())?;
     }
-    tokio::fs::rename(&part_path, &final_path).await.map_err(|e| e.to_string())?;
-
-    let _ = app.emit(
-        "model-download-progress",
-        Progress { id, downloaded, total, done: true, error: None },
-    );
-    Ok(())
+    tokio::fs::rename(&part_path, final_path).await.map_err(|e| e.to_string())?;
+    Ok(downloaded)
 }
 
 #[tauri::command]
 pub fn delete_model(app: AppHandle, id: String) -> Result<(), String> {
     let p = model_path(&app, &id)?;
-    if p.exists() {
-        std::fs::remove_file(&p).map_err(|e| {
-            format!("삭제 실패 (모델이 사용 중일 수 있습니다 — LLM을 먼저 정지하세요): {e}")
-        })?;
-    }
-    Ok(())
+    let res = if p.is_dir() {
+        std::fs::remove_dir_all(&p)
+    } else if p.exists() {
+        std::fs::remove_file(&p)
+    } else {
+        Ok(())
+    };
+    res.map_err(|e| format!("삭제 실패 (모델이 사용 중일 수 있습니다 — 앱을 다시 시작한 뒤 삭제해 보세요): {e}"))
 }

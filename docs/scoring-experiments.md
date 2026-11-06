@@ -96,6 +96,16 @@ Total for 3 samples + translation: 3B-v3 63.6 s, 7B-v3 140.0 s (sequential), 7B 
 - Offline replay of Email 2-B: fully lenient model output (3/3/3) → band 3.0 (was 4.0) from caps
   + table alone; with an anchored-style output (2/1/2) → **2.0**.
 
+## Grammar model (2026-11-06)
+Why: across runs the 7B LLM missed learner errors (fragment, "so", vague words) and sometimes
+"corrected" correct text. Candidates (reported CoNLL-2014 F0.5 on learner English):
+GECToR RoBERTa ≈ 0.52 vs LanguageTool ≈ 0.17; Harper (rules) not evaluated on learner text.
+Chosen: GECToR (letheviet/gector-roberta-base-5k-onnx, MIT; gotutiyan/gector port).
+- Tags → taxonomy by code (`gecMap.ts`); fixed Korean reasons; LLM keeps tone/word choice.
+- Verified here: tokenizer/tag/edit logic unit tests; full ONNX Runtime 1.31.1 path with a
+  synthetic GECToR-shaped model (caught a repeated-insertion bug: "pay a a a" → guard added).
+- To measure on the Mac: Settings → 문법 모델 테스트 (latency, edits), then ES-1 re-scoring.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).

@@ -5,6 +5,7 @@
 //   npm run fetch-engines            # normal use (macOS, Windows, CI)
 //   LLAMA_TAG=b1234 npm run fetch-engines     # pin a llama.cpp release
 //   WHISPER_TAG=v1.7.6 npm run fetch-engines  # pin a whisper.cpp release
+//   npm run fetch-engines -- --only=ort       # only ONNX Runtime (also: llama, whisper)
 //   WHISPER_VULKAN=1 npm run fetch-engines    # Windows: build whisper with Vulkan GPU
 //                                             # (needs Vulkan SDK + VS Build Tools + CMake)
 //
@@ -12,6 +13,7 @@
 //   engines/<os>/llama/llama-server[.exe] (+ shared libs)
 //   engines/<os>/whisper/whisper-cli[.exe] (+ shared libs on Windows prebuilt)
 //   engines/<os>/samples/jfk.wav
+//   engines/<os>/onnxruntime/libonnxruntime.dylib | onnxruntime.dll   (grammar model runtime)
 //   engines/<os>/VERSIONS.json
 //
 // Plain Node (>=18), no npm dependencies, so it runs identically on every OS.
@@ -206,6 +208,67 @@ async function fetchWhisper() {
   return { tag, build };
 }
 
+// ------------------------------------------------------------ ONNX Runtime
+// For the grammar model (GECToR). Loaded at runtime by the `ort` crate (load-dynamic), so
+// only the shared library is needed: libonnxruntime.dylib / onnxruntime.dll.
+// 1.31.1 is the version the Rust integration test runs against; any >= 1.20 works.
+const ORT_DEFAULT_TAG = "v1.31.1";
+
+async function fetchOrt() {
+  const ext = /\.(zip|tgz|tar\.gz)$/;
+  const patterns = {
+    macos: [new RegExp(`^onnxruntime-osx-${ARCH === "arm64" ? "arm64" : "x86_64"}-[0-9.]+` + ext.source)],
+    windows: [new RegExp("^onnxruntime-win-x64-[0-9.]+" + ext.source)],
+    linux: [new RegExp("^onnxruntime-linux-x64-[0-9.]+" + ext.source)],
+  }[OS];
+  const envTag = process.env.ORT_TAG ?? ORT_DEFAULT_TAG;
+  let rel;
+  try {
+    rel = await releaseWithAsset("microsoft/onnxruntime", envTag === "latest" ? undefined : envTag, patterns);
+    pickAsset(rel, patterns);
+  } catch (e) {
+    log(`ONNX Runtime ${envTag} not usable (${e.message.split("\n")[0]}) — trying the newest release with binaries`);
+    rel = await releaseWithAsset("microsoft/onnxruntime", undefined, patterns);
+  }
+  const asset = pickAsset(rel, patterns);
+  const archive = join(WORK, asset.name);
+  await download(asset.browser_download_url, archive);
+  const dir = join(WORK, "ort");
+  await mkdir(dir, { recursive: true });
+  extract(archive, dir);
+
+  const want = { macos: "libonnxruntime.dylib", windows: "onnxruntime.dll", linux: "libonnxruntime.so" }[OS];
+  // Archives ship versioned names (libonnxruntime.1.31.1.dylib) plus symlinks — find the
+  // real file and install it under the plain name (dereferenced, see installDirOf).
+  const found = (await findFile(dir, want)) ?? (await findMatching(dir, /^(lib)?onnxruntime[.\d]*\.(dylib|so[.\d]*|dll)$/));
+  if (!found) throw new Error(`${want} not found in ${asset.name}`);
+  const dest = join(OUT, "onnxruntime");
+  await rm(dest, { recursive: true, force: true });
+  await mkdir(dest, { recursive: true });
+  await cp(found, join(dest, want), { dereference: true });
+  if (OS === "windows") {
+    // Provider bridge DLL lives next to onnxruntime.dll in the official zip.
+    const shared = await findFile(dir, "onnxruntime_providers_shared.dll");
+    if (shared) await cp(shared, join(dest, "onnxruntime_providers_shared.dll"));
+  }
+  const size = (await stat(join(dest, want))).size;
+  if (size < 1_000_000) throw new Error(`${want} looks wrong (${size} bytes)`);
+  return { tag: rel.tag_name, asset: asset.name };
+}
+
+async function findMatching(dir, re) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const hit = await findMatching(p, re);
+      if (hit) return hit;
+    } else if (re.test(entry.name)) {
+      return p;
+    }
+  }
+  return null;
+}
+
 // ----------------------------------------------------------------- smoke test
 function smoke(bin, args) {
   const r = spawnSync(bin, args, { encoding: "utf8", cwd: dirname(bin) });
@@ -219,10 +282,17 @@ async function main() {
   log(`target: ${OS}/${ARCH} → ${OUT}`);
   await mkdir(WORK, { recursive: true });
   await mkdir(OUT, { recursive: true });
-  let llama, whisper;
+  // `npm run fetch-engines -- --only=ort` fetches just ONNX Runtime (no whisper rebuild).
+  const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7);
+  let prev = {};
   try {
-    llama = await fetchLlama();
-    whisper = await fetchWhisper();
+    prev = JSON.parse(await (await import("node:fs/promises")).readFile(join(OUT, "VERSIONS.json"), "utf8"));
+  } catch {}
+  let llama = prev.llama, whisper = prev.whisper, onnxruntime = prev.onnxruntime;
+  try {
+    if (!only || only === "llama") llama = await fetchLlama();
+    if (!only || only === "whisper") whisper = await fetchWhisper();
+    if (!only || only === "ort") onnxruntime = await fetchOrt();
   } finally {
     await rm(WORK, { recursive: true, force: true });
   }
@@ -234,9 +304,9 @@ async function main() {
     if (!existsSync(join(OUT, "samples", "jfk.wav"))) throw new Error("samples/jfk.wav missing");
     await writeFile(
       join(OUT, "VERSIONS.json"),
-      JSON.stringify({ os: OS, arch: ARCH, llama, whisper, fetchedAt: new Date().toISOString() }, null, 2) + "\n",
+      JSON.stringify({ os: OS, arch: ARCH, llama, whisper, onnxruntime, fetchedAt: new Date().toISOString() }, null, 2) + "\n",
     );
-    log("done", JSON.stringify({ llama, whisper }));
+    log("done", JSON.stringify({ llama, whisper, onnxruntime }));
   }
 }
 

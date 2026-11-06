@@ -19,6 +19,7 @@ export type ErrorCategory =
   | "run_on"
   | "register"
   | "word_choice"
+  | "mechanics"
   | "grammar_other";
 
 /** Display group (colour + short label). */
@@ -26,7 +27,7 @@ export type ErrorKind = "grammar" | "sentence" | "word_choice" | "register";
 
 export const CATEGORIES: ErrorCategory[] = [
   "agreement", "article", "plural", "verb_form", "preposition", "word_form",
-  "possessive", "fragment", "run_on", "register", "word_choice", "grammar_other",
+  "possessive", "fragment", "run_on", "register", "word_choice", "mechanics", "grammar_other",
 ];
 
 export interface CategoryInfo {
@@ -129,6 +130,14 @@ export const GUIDE: Record<ErrorCategory, CategoryInfo> = {
     principle:
       "thing, some, very, good 같은 막연한 단어는 뜻을 흐리게 해요. 상황에 맞는 구체적인 단어를 고르면 글이 정확하고 설득력 있어져요.",
     examples: ["this kind of situation", "extremely difficult"],
+  },
+  mechanics: {
+    kind: "sentence",
+    label: "대소문자·부호",
+    en: "capitalization / punctuation",
+    principle:
+      "문장 첫 글자와 고유명사(사람·나라·요일 이름)는 대문자로 써요. 쉼표는 접속사 앞(…, but …)이나 도입구 뒤(However, …)에, 마침표는 완전한 문장 끝에 찍어요.",
+    examples: ["However, I disagree.", "I met Professor Kim on Monday."],
   },
   grammar_other: {
     kind: "grammar",

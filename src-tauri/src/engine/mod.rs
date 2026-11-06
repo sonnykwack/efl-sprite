@@ -10,6 +10,7 @@
 //!    directory itself is set through the wide-char Win32 API, so it is safe.
 //! 3. Never assume `/` — build paths with `PathBuf::join`.
 
+pub mod gec;
 pub mod llama;
 pub mod whisper;
 

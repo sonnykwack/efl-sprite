@@ -67,5 +67,42 @@
     "recommended": true,
     "notes": "기본값 · 교사 채점과 가장 가까움 (v4 프롬프트)",
     "prompt": "v4"
+  },
+  {
+    "id": "gec-gector-roberta-base-5k",
+    "kind": "gec",
+    "name": "GECToR RoBERTa-base (학습자 문법 교정)",
+    "file": "gector-roberta-base-5k",
+    "files": [
+      {
+        "name": "config.json",
+        "url": "https://huggingface.co/letheviet/gector-roberta-base-5k-onnx/resolve/main/config.json"
+      },
+      {
+        "name": "tokenizer.json",
+        "url": "https://huggingface.co/letheviet/gector-roberta-base-5k-onnx/resolve/main/tokenizer.json"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "url": "https://huggingface.co/letheviet/gector-roberta-base-5k-onnx/resolve/main/tokenizer_config.json"
+      },
+      {
+        "name": "verb-form-vocab.txt",
+        "url": "https://huggingface.co/letheviet/gector-roberta-base-5k-onnx/resolve/main/verb-form-vocab.txt"
+      },
+      {
+        "name": "model.onnx",
+        "url": "https://huggingface.co/letheviet/gector-roberta-base-5k-onnx/resolve/main/model.onnx"
+      },
+      {
+        "name": "model.onnx.data",
+        "url": "https://huggingface.co/letheviet/gector-roberta-base-5k-onnx/resolve/main/model.onnx.data"
+      }
+    ],
+    "sizeMb": 522,
+    "minVramGb": 0,
+    "recommended": true,
+    "notes": "학습자 영어 오류 전용 교정 모델 · CPU에서 문장당 0.1초 내외",
+    "license": "MIT — letheviet/gector-roberta-base-5k-onnx (gotutiyan/gector 기반). 학습 데이터(NUCLE, FCE, W&I+LOCNESS 등)의 이용 조건은 각 원 저작자 고지를 따름."
   }
 ]

@@ -72,6 +72,15 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
   evaluation sets), error taxonomy with curated Korean principles (`grammarGuide.ts`) + model's
   one-line `why`, email required-points coverage, deterministic caps (`applyCaps`), and the
   piecewise `BAND_MAP` in rubrics.ts (provisional; refit on teacher data).
+- Grammar model (GECToR, `engine/gec.rs`): RoBERTa-base tagger via ONNX Runtime (`ort` crate,
+  `load-dynamic`; runtime lib fetched to `engines/<os>/onnxruntime/` by fetch-engines). Port of
+  gotutiyan/gector predict.py; tags map to the taxonomy in `src/lib/gecMap.ts` (code decides the
+  category, fixed Korean reasons). Offsets returned as UTF-16 units. Runs before the LLM; its
+  edits go into the v4 prompt as <detected_grammar_errors>. Merge priority: rules → GEC → LLM;
+  overlapping items of different category and size are both kept (`duplicates`). Optional:
+  scoring still works if the model or runtime is missing. Integration test with a synthetic
+  model: `EFL_ORT_LIB=… EFL_GEC_DIR=… cargo test -- --ignored`.
+- Multi-file models: catalog `files[]` → downloaded into `models/<file>/`; `license` shown in UI.
 - macOS WKWebView shows no `title` tooltips — never rely on hover; use click/tap UI.
 - Production scoring = `evaluateResponse(..., samples: 3)` → samples sent concurrently
   (llama-server `--parallel 3`, 3 × 8192 ctx) → per-criterion median (`combineSamples`).

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader";
+import GecLab from "../components/GecLab";
 import ScoringLab from "../components/ScoringLab";
 import { api, inTauri } from "../lib/api";
 import type { AppInfo, DownloadProgress, ModelEntry } from "../lib/types";
@@ -90,6 +91,8 @@ export default function SettingsPage() {
           <div>{info.engines.whisper ? "✅ 설치됨" : "❌ 없음 — npm run fetch-engines"}</div>
           <div className="text-ink-400">LLM 엔진 (llama-server)</div>
           <div>{info.engines.llama ? "✅ 설치됨" : "❌ 없음 — npm run fetch-engines"}</div>
+          <div className="text-ink-400">문법 모델 런타임 (ONNX)</div>
+          <div>{info.engines.onnxruntime ? "✅ 설치됨" : "❌ 없음 — npm run fetch-engines -- --only=ort"}</div>
           <div className="text-ink-400">모델 폴더</div>
           <div className="truncate" data-selectable title={info.modelsDir}>
             {info.modelsDir}
@@ -97,10 +100,10 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {(["whisper", "llm"] as const).map((kind) => (
+      {(["whisper", "llm", "gec"] as const).map((kind) => (
         <section key={kind} className="mb-6">
           <h2 className="mb-2 text-sm font-semibold text-ink-600">
-            {kind === "whisper" ? "음성 인식 (Whisper)" : "채점 · 생성 (LLM)"}
+            {kind === "whisper" ? "음성 인식 (Whisper)" : kind === "llm" ? "채점 · 생성 (LLM)" : "문법 교정 (GECToR)"}
           </h2>
           <ul className="grid gap-2">
             {models
@@ -120,8 +123,9 @@ export default function SettingsPage() {
                         )}
                       </div>
                       <div className="text-xs text-ink-400">
-                        약 {m.sizeMb.toLocaleString()} MB · VRAM {m.minVramGb} GB 이상 권장 · {m.notes}
+                        약 {m.sizeMb.toLocaleString()} MB · {m.minVramGb > 0 ? `VRAM ${m.minVramGb} GB 이상 권장 · ` : ""}{m.notes}
                       </div>
+                      {m.license && <div className="mt-0.5 text-[11px] text-ink-400">라이선스: {m.license}</div>}
                       {downloading && (
                         <div className="mt-2 h-1.5 overflow-hidden rounded bg-sprite-100">
                           <div
@@ -165,6 +169,8 @@ export default function SettingsPage() {
           </ul>
         </section>
       ))}
+
+      <GecLab gec={models.find((m) => m.kind === "gec" && m.installed)} runtime={info?.engines.onnxruntime ?? false} />
 
       <ScoringLab
         llms={models.filter((m) => m.kind === "llm" && m.installed)}

@@ -27,6 +27,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
 tokio = { version = "1", features = ["fs", "io-util", "time", "process"] }
 futures-util = "0.3"
+# Grammar model (GECToR, ONNX). `load-dynamic`: the ONNX Runtime library is fetched per OS
+# by `npm run fetch-engines` and loaded at runtime — nothing is downloaded at compile time.
+# api-20 = works with any ONNX Runtime >= 1.20.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-20"] }
+# Pure-Rust regex backend (no C/C++ build) → identical builds on macOS and Windows.
+tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
 
 [profile.release]
 codegen-units = 1

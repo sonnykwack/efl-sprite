@@ -8,6 +8,8 @@ import type {
   AttemptSummary,
   ChatMessage,
   DownloadProgress,
+  GecOptions,
+  GecResult,
   ModelEntry,
   NewAttempt,
   NewEvaluation,
@@ -33,6 +35,10 @@ export const api = {
   llmStop: () => invoke<void>("llm_stop"),
   llmChat: (messages: ChatMessage[], jsonSchema?: unknown) =>
     invoke<string>("llm_chat", { messages, jsonSchema: jsonSchema ?? null }),
+
+  /** Grammar model (GECToR). Loads the model on first call (a few seconds). */
+  gecCheck: (modelId: string, text: string, options?: GecOptions) =>
+    invoke<GecResult>("gec_check", { modelId, text, options: options ?? null }),
 
   // Tasks (문제)
   listTasks: () => invoke<Task[]>("list_tasks"),

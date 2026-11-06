@@ -6,6 +6,8 @@ export type Platform = "macos" | "windows" | "linux";
 export interface EngineStatus {
   whisper: boolean;
   llama: boolean;
+  /** ONNX Runtime library for the grammar model. */
+  onnxruntime: boolean;
 }
 
 export interface AppInfo {
@@ -17,7 +19,7 @@ export interface AppInfo {
   engines: EngineStatus;
 }
 
-export type ModelKind = "whisper" | "llm";
+export type ModelKind = "whisper" | "llm" | "gec";
 
 export interface ModelEntry {
   id: string;
@@ -29,8 +31,10 @@ export interface ModelEntry {
   minVramGb: number;
   recommended: boolean;
   notes: string;
-  /** LLM only: scoring prompt version recommended for this model ("v2" | "v3"). */
+  /** LLM only: scoring prompt version recommended for this model. */
   prompt?: string;
+  /** License / attribution text (shown in Settings). */
+  license?: string;
   installed: boolean;
 }
 
@@ -127,4 +131,25 @@ export interface AttemptSummary {
   taskType: TaskType;
   band: number | null;
   teacherScore: number | null;
+}
+
+/** One correction from the grammar model, in UTF-16 offsets of the response text. */
+export interface GecEdit {
+  start: number;
+  end: number;
+  original: string;
+  corrected: string;
+  /** GECToR tags, e.g. "$TRANSFORM_VERB_VB_VBZ", "$APPEND_the". */
+  labels: string[];
+}
+
+export interface GecResult {
+  edits: GecEdit[];
+  ms: number;
+}
+
+export interface GecOptions {
+  keepConfidence?: number;
+  minErrorProb?: number;
+  iterations?: number;
 }

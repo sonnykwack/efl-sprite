@@ -42,10 +42,11 @@ import {
   type ErrorCategory,
   type ErrorKind,
 } from "./grammarGuide";
+import { displaySpan, mapGecEdit } from "./gecMap";
 import { detectRuleIssues } from "./rules";
 import { snapQuote } from "./snap";
 import { SCALE_MAX, TASK_SPECS, toBand, type Criterion } from "./rubrics";
-import type { ChatMessage, TaskType } from "./types";
+import type { ChatMessage, GecEdit, TaskType } from "./types";
 
 export interface ScorableTask {
   taskType: TaskType;
@@ -92,8 +93,8 @@ export interface LanguageError {
   grounded: boolean;
   /** Whether `quote` is a real span of the response (exact or snapped). */
   located: boolean;
-  /** Who found it: the LLM or a deterministic rule (src/lib/rules.ts). */
-  source: "llm" | "rule";
+  /** Who found it: the LLM, a deterministic rule (rules.ts) or the grammar model (GECToR). */
+  source: "llm" | "rule" | "gec";
   /** Character span in the response (−1 if not located) — used to dedupe and order items. */
   start: number;
   end: number;
@@ -302,6 +303,21 @@ function taskTextTagged(task: ScorableTask, response: string, stats?: SpeakingSt
   return parts.join("\n");
 }
 
+/**
+ * v4: grammar errors already found by the GECToR model. The LLM uses them for Language Use
+ * and spends its own `errors` on what the grammar model cannot judge (tone, word choice,
+ * sentence structure) — shorter output, fewer wrong "corrections".
+ */
+function gecBlock(gec?: GecEdit[]): string {
+  if (!gec?.length) return "";
+  const lines = gec.map((e) => `- "${e.original}" → "${e.corrected || "(delete)"}"`).join("\n");
+  return (
+    "\n\n<detected_grammar_errors>  (found by a grammar-correction model — count them when scoring Language Use; do NOT list them again in `errors`)\n" +
+    lines +
+    "\n</detected_grammar_errors>"
+  );
+}
+
 function taskText(task: ScorableTask, response: string, stats?: SpeakingStats): string {
   const spec = TASK_SPECS[task.taskType];
   const parts = [`## Task (${spec.label})`, task.prompt.trim()];
@@ -336,7 +352,7 @@ const ERROR_CHECKLIST = [
 export function buildEvaluationMessages(
   task: ScorableTask,
   response: string,
-  opts: { lang: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion },
+  opts: { lang: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; gec?: GecEdit[] },
 ): ChatMessage[] {
   const spec = TASK_SPECS[task.taskType];
   const version = opts.version ?? DEFAULT_PROMPT_VERSION;
@@ -396,7 +412,7 @@ export function buildEvaluationMessages(
       .join("\n");
     return [
       { role: "system", content: system },
-      { role: "user", content: taskTextTagged(task, response, opts.stats) },
+      { role: "user", content: taskTextTagged(task, response, opts.stats) + gecBlock(opts.gec) },
     ];
   }
 
@@ -467,7 +483,7 @@ export function parseEvaluation(
   raw: string,
   task: ScorableTask,
   response: string,
-  meta: { latencyMs: number; modelId: string; version: PromptVersion },
+  meta: { latencyMs: number; modelId: string; version: PromptVersion; gec?: GecEdit[] },
 ): LlmEvaluation {
   const spec = TASK_SPECS[task.taskType];
   let data: Record<string, unknown>;
@@ -547,7 +563,23 @@ export function parseEvaluation(
             end: snap.end,
           };
         });
-  const errors = mergeCorrections(rules, llmErrors);
+  const gecErrors: LanguageError[] = (meta.gec ?? []).map((g) => {
+    const m = mapGecEdit(g);
+    const span = displaySpan(response, g);
+    return {
+      kind: KIND_OF(m.category),
+      category: m.category,
+      why: m.why,
+      quote: span.quote,
+      correction: span.correction,
+      grounded: true,
+      located: true,
+      source: "gec" as const,
+      start: span.start,
+      end: span.end,
+    };
+  });
+  const errors = mergeCorrections(rules, llmErrors, gecErrors);
   const a = data.analysis as
     | { main_point?: unknown; support_given?: unknown; not_addressed?: unknown; required_points?: unknown }
     | undefined;
@@ -650,9 +682,25 @@ const overlaps = (a: LanguageError, b: LanguageError) => {
  * accepted item — so "students is understanding" survives but a whole-sentence rewrite that
  * also covers the rule-detected fragment does not. Result is in reading order.
  */
-export function mergeCorrections(rules: LanguageError[], llm: LanguageError[]): LanguageError[] {
+/**
+ * Duplicate = overlapping AND describing the same thing: same category, or spans of similar
+ * size. A small grammar fix inside a longer tone rewrite ("want" → "want an" inside
+ * "I want answer quickly" → "I would appreciate a quick reply") is a different problem —
+ * both are kept.
+ */
+const duplicates = (a: LanguageError, b: LanguageError) => {
+  if (!overlaps(a, b)) return false;
+  if (a.category === b.category) return true;
+  const la = a.end - a.start;
+  const lb = b.end - b.start;
+  return Math.max(la, lb) <= 2 * Math.min(la, lb);
+};
+
+export function mergeCorrections(rules: LanguageError[], llm: LanguageError[], gec: LanguageError[] = []): LanguageError[] {
   const accepted: LanguageError[] = [];
   for (const r of rules) if (!accepted.some((a) => overlaps(a, r))) accepted.push(r);
+  // Grammar model next: trained on learner errors, exact spans, category decided by its tag.
+  for (const g of gec) if (!accepted.some((a) => duplicates(a, g))) accepted.push(g);
   const bySpecificity = [...llm].sort((a, b) => (a.end - a.start) - (b.end - b.start));
   for (const e of bySpecificity) {
     if (e.start < 0) {
@@ -660,7 +708,7 @@ export function mergeCorrections(rules: LanguageError[], llm: LanguageError[]): 
       if (!accepted.some((a) => normalizeWords(a.quote).join(" ") === normalizeWords(e.quote).join(" "))) accepted.push(e);
       continue;
     }
-    if (!accepted.some((a) => overlaps(a, e))) accepted.push(e);
+    if (!accepted.some((a) => (gec.length ? duplicates(a, e) : overlaps(a, e)))) accepted.push(e);
   }
   return accepted.sort((a, b) => (a.start < 0 ? 1e9 : a.start) - (b.start < 0 ? 1e9 : b.start));
 }
@@ -745,17 +793,18 @@ export async function translateToKorean(e: LlmEvaluation): Promise<LlmEvaluation
 export async function evaluateOnce(
   task: ScorableTask,
   response: string,
-  opts: { modelId: string; lang?: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion },
+  opts: { modelId: string; lang?: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; gec?: GecEdit[] },
 ): Promise<LlmEvaluation> {
   const spec = TASK_SPECS[task.taskType];
   if (spec.scoring !== "llm") throw new Error(`${spec.label} is not LLM-scored`);
   const version = opts.version ?? DEFAULT_PROMPT_VERSION;
   await api.llmStart(opts.modelId);
-  const messages = buildEvaluationMessages(task, response, { lang: opts.lang ?? "ko", stats: opts.stats, version });
+  const messages = buildEvaluationMessages(task, response, { lang: opts.lang ?? "ko", stats: opts.stats, version, gec: opts.gec });
   const t0 = performance.now();
   const nPoints = task.taskType === "email" ? requiredPoints(task.prompt).length : 0;
   const raw = await api.llmChat(messages, evaluationSchema(spec.criteria, version, { requiredPoints: nPoints }));
   return parseEvaluation(raw, task, response, {
+    gec: opts.gec,
     latencyMs: Math.round(performance.now() - t0),
     modelId: opts.modelId,
     version,
@@ -775,6 +824,7 @@ export async function evaluateResponse(
     stats?: SpeakingStats;
     version?: PromptVersion;
     samples?: number;
+    gec?: GecEdit[];
     onProgress?: (stage: "loading" | "scoring" | "translating") => void;
   },
 ): Promise<LlmEvaluation> {

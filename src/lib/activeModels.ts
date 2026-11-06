@@ -8,6 +8,8 @@ import type { ModelEntry } from "./types";
 export interface ActiveModels {
   llm: ModelEntry | null;
   whisper: ModelEntry | null;
+  /** Grammar model (GECToR) — optional; scoring works without it. */
+  gec: ModelEntry | null;
   prompt: PromptVersion;
 }
 
@@ -17,7 +19,7 @@ export function pickActive(models: ModelEntry[]): ActiveModels {
     return installed.find((m) => m.recommended) ?? installed[0] ?? null;
   };
   const llm = pick("llm");
-  return { llm, whisper: pick("whisper"), prompt: ((llm?.prompt as PromptVersion) ?? "v3") };
+  return { llm, whisper: pick("whisper"), gec: pick("gec"), prompt: ((llm?.prompt as PromptVersion) ?? "v3") };
 }
 
 export async function loadActiveModels(): Promise<ActiveModels> {

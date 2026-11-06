@@ -12,6 +12,7 @@ use tauri::{AppHandle, Manager, RunEvent};
 struct EngineStatus {
     whisper: bool,
     llama: bool,
+    onnxruntime: bool,
 }
 
 #[derive(Serialize)]
@@ -36,6 +37,7 @@ fn app_info(app: AppHandle) -> Result<AppInfo, String> {
         engines: EngineStatus {
             whisper: paths::whisper_bin(&app)?.is_file(),
             llama: paths::llama_bin(&app)?.is_file(),
+            onnxruntime: engine::gec::runtime_present(&app),
         },
     })
 }
@@ -45,6 +47,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(engine::llama::LlamaState::default())
         .manage(models::Downloads::default())
+        .manage(engine::gec::GecState::default())
         .setup(|app| {
             let db = db::open(app.handle())?;
             app.manage(db);
@@ -59,6 +62,7 @@ pub fn run() {
             engine::llama::llm_start,
             engine::llama::llm_chat,
             engine::llama::llm_stop,
+            engine::gec::gec_check,
             db::list_tasks,
             db::create_task,
             db::delete_task,

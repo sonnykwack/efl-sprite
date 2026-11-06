@@ -371,7 +371,7 @@ function Scoring({
     const id = setInterval(() => setNow(performance.now()), 500);
     return () => clearInterval(id);
   }, [phase.error]);
-  const order: Stage[] = ["saving", "loading", "scoring", "translating"];
+  const order: Stage[] = ["saving", "grammar", "loading", "scoring", "translating"];
   const at = order.indexOf(phase.stage);
 
   return (
