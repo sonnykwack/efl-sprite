@@ -93,6 +93,9 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
   (`finishWithCaps`). Extra caps: email tone hits (`rules.ts` TONE), grammar errors per 100
   words from GEC/rules (never LLM items). `tidy.ts` narrows/filters LLM corrections and joins
   adjacent GEC edits. BAND_MAP refit 1 on ES-1 (2 → 2.0, 4 → 4.0).
+- Precision first: when GEC ran, LLM corrections are limited to word_choice / register /
+  run_on / possessive / word_form (`LLM_CATEGORIES_WITH_GEC`) and each is re-judged by a
+  separate call (`verify.ts`, reason → verdict; failure = drop). Grammar = GEC + rules only.
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.
 

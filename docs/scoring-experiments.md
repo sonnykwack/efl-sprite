@@ -170,6 +170,22 @@ Offline checks: the four bad corrections from the screenshot are dropped or narr
 quoted sentence + "missing" → partial. Expected (not yet measured): Email 2-B 6/15 → 2.0,
 Email 1-B 13/15 → 4.5, Email 2-A Language capped → ≈ 4.0.
 
+## LLM corrections on a correct response (2026-11-06, AD 3 strong, teacher 3.5 = AI 3.5)
+- Grammar model: 0 edits (right — the response is essentially correct). LLM: 4 items, all
+  wrong: "library or cleaned" (agreement), "match" / "than counting" (fragment),
+  "reflection essay → paper" (word choice). Asked for errors inside a long scoring prompt,
+  the 7B model produces some whether or not they exist.
+- Alternatives considered: a larger tagger (GECToR DeBERTa-large, ~3× size, no ONNX export
+  published → own export + slower CPU inference) — it would not fix this, since the false
+  items came from the LLM, not the tagger.
+- Change (precision first): when the grammar model ran, grammar categories belong to it and
+  to the rules; the LLM may only list word_choice / register / run_on / possessive /
+  word_form (≤ 3, "an empty list is normal"), and each remaining item gets a separate short
+  verification call (`verify.ts`: full sentence, reason → verdict error / unnatural /
+  acceptable; failure = drop).
+- Expected on this response: 3 items removed by category, "essay → paper" judged by the
+  verifier. To measure: false items per correct response, and recall on Email 2-B.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).

@@ -46,6 +46,7 @@ import { displaySpan } from "./gecMap";
 import { checkRequiredPoints } from "./points";
 import { detectRuleIssues, detectToneIssues } from "./rules";
 import { joinAdjacentGec, mapJoinedGec, tidyLlmCorrection } from "./tidy";
+import { verifyLlmCorrections } from "./verify";
 import { snapQuote } from "./snap";
 import { translateMany } from "./translate";
 import { SCALE_MAX, TASK_SPECS, toBand, type Criterion } from "./rubrics";
@@ -147,6 +148,10 @@ export interface LlmEvaluation {
 
 export type FeedbackLang = "ko" | "en";
 export type PromptVersion = "v1" | "v2" | "v3" | "v4";
+/** LLM correction categories kept when the grammar model ran (verified again in verify.ts). */
+export const LLM_CATEGORIES_WITH_GEC = new Set<ErrorCategory>(["word_choice", "register", "run_on", "possessive", "word_form"]);
+const categoryOfError = (e: LanguageError): ErrorCategory => e.category ?? categoryFromKind(e.kind);
+
 export const DEFAULT_PROMPT_VERSION: PromptVersion = "v4";
 
 /** Required bullet points of an email task ("- describe the problem"). */
@@ -398,7 +403,9 @@ export function buildEvaluationMessages(
       `You are an experienced, fair rater of English ${spec.section} responses for TOEFL iBT-style practice (task: ${spec.label}).`,
       "Only the text inside <student_response> is the student's work. Quote ONLY from it.",
       "Work in this order:",
-      `1. errors: up to 6 real errors, most important first. For each: category (one of: ${TAXONOMY_PROMPT}); quote = the exact words from <student_response> (2–10 words); correction = the same words, corrected; why = ONE short sentence naming what is wrong in THIS sentence (e.g. "'students' is plural, so the verb must be 'are'"). Never list text that is already correct.`,
+      opts.gec != null
+        ? `1. errors: grammar (agreement, articles, plurals, verb forms, prepositions, fragments, spelling) has ALREADY been checked by a grammar model — do NOT list any of that. List only up to 3 clear word_choice, register, run_on or possessive problems that a teacher would mark wrong. Style preferences are NOT errors: if the original is correct and natural, leave it. An empty list is normal for a good response. For each: category (one of: ${TAXONOMY_PROMPT}); quote = the exact words from <student_response> (2–10 words); correction = the same words, corrected; why = ONE short sentence naming what is wrong in THIS sentence.`
+        : `1. errors: up to 6 real errors, most important first. For each: category (one of: ${TAXONOMY_PROMPT}); quote = the exact words from <student_response> (2–10 words); correction = the same words, corrected; why = ONE short sentence naming what is wrong in THIS sentence (e.g. "'students' is plural, so the verb must be 'are'"). Never list text that is already correct.`,
       "2. analysis — read before you judge:",
       "   main_point: the student's position or purpose in one sentence.",
       "   support_given: each reason or example the student actually gives (one short line each). A personal story with details IS a specific example.",
@@ -557,7 +564,10 @@ export function parseEvaluation(
       if (!e.located) return [e];
       const t = tidyLlmCorrection(response, e, { gecRan: meta.gec != null });
       return t ? [{ ...e, ...t, kind: KIND_OF(t.category) }] : [];
-    });
+    })
+    // Precision first: when the grammar model ran, grammar belongs to it (and to the rules).
+    // The LLM invented agreement/fragment "errors" in correct sentences (2026-11-06, AD 3).
+    .filter((e) => meta.gec == null || LLM_CATEGORIES_WITH_GEC.has(categoryOfError(e)));
 
   // Hybrid (v2+): deterministic rules for what the LLM reliably misses.
   const rules: LanguageError[] =
@@ -877,6 +887,9 @@ export async function evaluateResponse(
     bullets.length ? checkRequiredPoints(task.prompt, response, bullets) : Promise.resolve(null),
   ]);
   let result = { ...finishWithCaps(combineSamples(runs), task, response, points), latencyMs: Math.round(performance.now() - wall0) };
+  // Second opinion on each remaining LLM correction (concurrent, short calls); keeps only
+  // the ones judged actually wrong or clearly unnatural.
+  if (version === "v4") result = { ...result, errors: await verifyLlmCorrections(result.errors, response) };
   if ((opts.version ?? DEFAULT_PROMPT_VERSION) !== "v1" && (opts.lang ?? "ko") === "ko") {
     opts.onProgress?.("translating");
     const t0 = performance.now();
