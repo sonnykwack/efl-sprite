@@ -72,6 +72,9 @@ pub async fn llm_start(app: AppHandle, state: State<'_, LlamaState>, model_id: S
         }
         let data = paths::data_dir(&app)?;
         let model = models::installed_path(&app, &model_id)?;
+        let entry = models::find(&model_id)?;
+        let slots = entry.parallel.unwrap_or(3).clamp(1, 4);
+        let ctx = slots * entry.ctx_per_slot.unwrap_or(8192).clamp(2048, 16384);
         let model_arg = rel_arg(&model, &data)?;
         let port = free_port()?;
 
@@ -83,9 +86,10 @@ pub async fn llm_start(app: AppHandle, state: State<'_, LlamaState>, model_id: S
         let child = command(&bin, &data)
             .args(["-m", &model_arg])
             .args(["--host", "127.0.0.1", "--port", &port.to_string()])
-            // 3 parallel slots × 8192 tokens: the 3 scoring samples run concurrently
-            // (continuous batching) — much faster than 3 sequential requests on a GPU.
-            .args(["--parallel", "3", "-c", "24576"])
+            // Parallel slots (default 3 × 8192 tokens): the scoring samples and the short
+            // check/translation calls run concurrently (continuous batching) — much faster than
+            // sequential requests on a GPU. Per-model override in the catalog (14B: 2 slots).
+            .args(["--parallel", &slots.to_string(), "-c", &ctx.to_string()])
             .args(["-ngl", "999"]) // offload all layers to GPU when available (ignored on CPU builds)
             .args(["-t", &threads().to_string()])
             .arg("--jinja") // use the model's own chat template

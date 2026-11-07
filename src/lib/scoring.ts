@@ -47,6 +47,7 @@ import { checkRequiredPoints } from "./points";
 import { detectRuleIssues, detectToneIssues } from "./rules";
 import { joinAdjacentGec, mapJoinedGec, tidyLlmCorrection } from "./tidy";
 import { verifyLlmCorrections } from "./verify";
+import { featuresBlock, measure, type LanguageFeatures } from "./features";
 import { snapQuote } from "./snap";
 import { translateMany } from "./translate";
 import { SCALE_MAX, TASK_SPECS, toBand, type Criterion } from "./rubrics";
@@ -134,6 +135,10 @@ export interface LlmEvaluation {
   wordCount: number;
   /** Feedback texts left in English because translation failed validation. */
   untranslated?: number;
+  /** v4: measured language indicators (features.ts). */
+  features?: LanguageFeatures;
+  /** v4: Korean notes on adjustments made by the measured-features consistency check. */
+  adjustments?: string[];
   overallFeedback: string;
   total: number;
   max: number;
@@ -368,7 +373,7 @@ const ERROR_CHECKLIST = [
 export function buildEvaluationMessages(
   task: ScorableTask,
   response: string,
-  opts: { lang: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; gec?: GecEdit[] },
+  opts: { lang: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; gec?: GecEdit[]; features?: string },
 ): ChatMessage[] {
   const spec = TASK_SPECS[task.taskType];
   const version = opts.version ?? DEFAULT_PROMPT_VERSION;
@@ -430,7 +435,10 @@ export function buildEvaluationMessages(
       .join("\n");
     return [
       { role: "system", content: system },
-      { role: "user", content: taskTextTagged(task, response, opts.stats) + gecBlock(opts.gec) },
+      {
+        role: "user",
+        content: taskTextTagged(task, response, opts.stats) + gecBlock(opts.gec) + (opts.features ? `\n\n${opts.features}` : ""),
+      },
     ];
   }
 
@@ -838,21 +846,57 @@ export async function translateToKorean(e: LlmEvaluation): Promise<LlmEvaluation
  */
 export function finishWithCaps(e: LlmEvaluation, task: ScorableTask, response: string, points: RequiredPoint[] | null): LlmEvaluation {
   const criteria = e.criteria.map((c) => ({ ...c, uncapped: undefined }));
+  let features: LanguageFeatures | undefined;
+  const adjustments: string[] = [];
+  if (e.version === "v4") {
+    // Measured language indicators, with the FINAL error list (grammar model + rules only —
+    // LLM items are not counted, same rule as the error-density cap).
+    const errorCount = e.errors.filter((x) => x.source === "gec" || x.source === "rule").length;
+    features = measure(response, { minWords: TASK_SPECS[task.taskType].minWords, errorCount });
+    // Consistency check: when the LLM's Language score is far (≥ 1.5) from the measured
+    // indicators, move it ONE point toward them. The LLM still decides; the numbers stop
+    // outliers (seen: a 55-word email full of errors given Language 3–4).
+    const lang = criteria.find((c) => c.key === "language");
+    if (lang) {
+      const diff = features.languageScore - lang.score;
+      if (Math.abs(diff) >= 1.5) {
+        const to = Math.min(SCALE_MAX, Math.max(0, lang.score + Math.sign(diff)));
+        adjustments.push(
+          `언어 지표 평균 ${features.languageScore.toFixed(1)}점과 AI 판단 ${lang.score}점의 차이가 커서 언어 사용 점수를 ${lang.score} → ${to}점으로 조정했어요.`,
+        );
+        lang.score = to;
+      }
+    }
+  }
   const caps = e.version === "v4" ? applyCaps(criteria, task, e.wordCount, points, { response, errors: e.errors }) : [];
-  return finalize({ ...e, criteria, caps, points: points ?? e.points });
+  return finalize({ ...e, criteria, caps, points: points ?? e.points, features, adjustments });
 }
 
 /** One LLM sample (no translation, no combining). Exposed for the scoring lab. */
 export async function evaluateOnce(
   task: ScorableTask,
   response: string,
-  opts: { modelId: string; lang?: FeedbackLang; stats?: SpeakingStats; version?: PromptVersion; gec?: GecEdit[]; caps?: boolean },
+  opts: {
+    modelId: string;
+    lang?: FeedbackLang;
+    stats?: SpeakingStats;
+    version?: PromptVersion;
+    gec?: GecEdit[];
+    caps?: boolean;
+    features?: string;
+  },
 ): Promise<LlmEvaluation> {
   const spec = TASK_SPECS[task.taskType];
   if (spec.scoring !== "llm") throw new Error(`${spec.label} is not LLM-scored`);
   const version = opts.version ?? DEFAULT_PROMPT_VERSION;
   await api.llmStart(opts.modelId);
-  const messages = buildEvaluationMessages(task, response, { lang: opts.lang ?? "ko", stats: opts.stats, version, gec: opts.gec });
+  const messages = buildEvaluationMessages(task, response, {
+    lang: opts.lang ?? "ko",
+    stats: opts.stats,
+    version,
+    gec: opts.gec,
+    features: opts.features,
+  });
   const t0 = performance.now();
   // Required points are checked separately (points.ts), not inside this long JSON.
   const raw = await api.llmChat(messages, evaluationSchema(spec.criteria, version));
@@ -891,8 +935,18 @@ export async function evaluateResponse(
   const wall0 = performance.now();
   const version = opts.version ?? DEFAULT_PROMPT_VERSION;
   const bullets = version === "v4" && task.taskType === "email" ? requiredPoints(task.prompt) : [];
+  // Indicators the LLM sees before judging (error count = grammar model + rules, as in the cap).
+  const pre =
+    version === "v4"
+      ? featuresBlock(
+          measure(response, {
+            minWords: TASK_SPECS[task.taskType].minWords,
+            errorCount: (opts.gec?.length ?? 0) + detectRuleIssues(response, task.taskType).length,
+          }),
+        )
+      : undefined;
   const [runs, points] = await Promise.all([
-    Promise.all(Array.from({ length: n }, () => evaluateOnce(task, response, { ...opts, caps: false }))),
+    Promise.all(Array.from({ length: n }, () => evaluateOnce(task, response, { ...opts, caps: false, features: pre }))),
     bullets.length ? checkRequiredPoints(task.prompt, response, bullets) : Promise.resolve(null),
   ]);
   let result = { ...finishWithCaps(combineSamples(runs), task, response, points), latencyMs: Math.round(performance.now() - wall0) };

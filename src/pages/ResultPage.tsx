@@ -297,7 +297,11 @@ export default function ResultPage({ attemptId, navigate }: { attemptId?: number
                   <div>
                     {ev.samples > 1 ? `${ev.samples}회 채점 중앙값` : "1회 채점"} · {((row.latencyMs ?? 0) / 1000).toFixed(0)}초
                   </div>
-                  <div className="text-ink-400">AI 추정치이며 ETS 공식 점수가 아니에요.</div>
+                  <div>
+                  ETS 방식 과제 점수 추정{" "}
+                  <span className="font-semibold">{Math.round((ev.total / ev.max) * 5)}/5</span>
+                </div>
+                <div className="text-ink-400">AI 추정치이며 ETS 공식 점수가 아니에요.</div>
                 </div>
                 <label className="ml-auto grid gap-1 text-right text-xs text-ink-600">
                   교사 채점

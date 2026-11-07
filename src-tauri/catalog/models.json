@@ -69,6 +69,20 @@
     "prompt": "v4"
   },
   {
+    "id": "llm-qwen2.5-14b",
+    "kind": "llm",
+    "name": "Qwen2.5 14B Instruct (Q4_K_M)",
+    "file": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+    "url": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+    "sizeMb": 9000,
+    "minVramGb": 16,
+    "recommended": false,
+    "notes": "고정밀 · 판단이 더 정교하지만 7B보다 약 2배 느림 · 메모리 24GB 이상 권장",
+    "prompt": "v4",
+    "parallel": 2,
+    "ctxPerSlot": 6144
+  },
+  {
     "id": "gec-gector-roberta-base-5k",
     "kind": "gec",
     "name": "GECToR RoBERTa-base (학습자 문법 교정)",

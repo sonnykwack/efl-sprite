@@ -102,6 +102,15 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
   folder). Prompts read by the OS voice (`speech.ts`, Web Speech API); text fallback.
   Listen & Repeat: `repeat.ts` (Whisper per sentence → word accuracy → 0–5 per sentence →
   band; audio_path = JSON array). Interview: transcript + `speakingStats` → LLM pipeline.
+- Measured language features (`features.ts`): length, MATTR + long-word share, clause
+  variety, error density (GEC + rules), linking expressions → 0–5 indicators shown to the
+  student and sent to the LLM as <measured_features>; Language moves 1 point toward the
+  indicator mean when they differ by ≥ 1.5 (`finishWithCaps`). Catalog `parallel` /
+  `ctxPerSlot` size llama-server per model (14B: 2 × 6144).
+- Task packs: `.eflsprite` (UTF-8 JSON, `taskpack.ts`; Rust `taskfile.rs` reads/writes the
+  dialog-chosen path). AI task drafts: `taskgen.ts` (schema per type).
+- Teacher review: `attempts.teacher_review` JSON (`review.ts`), `ReviewPage`; teacher
+  corrections override AI ones in the student view; ✓/✗ verdicts → AI precision on History.
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.
 

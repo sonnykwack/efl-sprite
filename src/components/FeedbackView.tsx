@@ -249,6 +249,43 @@ export default function FeedbackView({
         ))}
       </section>
 
+      {ev.features && (
+        <section className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="mb-1 flex items-baseline justify-between">
+            <div className="font-semibold">
+              언어 지표 <span className="text-xs font-normal text-ink-400">코드로 자동 측정 · 매번 같은 결과</span>
+            </div>
+            <span className="text-xs text-ink-600">평균 {ev.features.languageScore.toFixed(1)} / 5</span>
+          </div>
+          <ul className="mt-2 grid gap-2.5">
+            {ev.features.indicators.map((x) => (
+              <li key={x.key} className="grid gap-0.5 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="w-28 shrink-0 font-medium">{x.nameKo}</span>
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span key={n} className={`h-1.5 w-4 rounded-full ${n <= x.score ? "bg-sky-500" : "bg-sky-100"}`} />
+                    ))}
+                  </div>
+                  <span className="truncate text-xs text-ink-400" data-selectable>
+                    {x.value}
+                  </span>
+                </div>
+                <div className="pl-[7.5rem] text-xs text-ink-600">
+                  {x.what}
+                  {x.tip && <span className="block text-sky-700">→ {x.tip}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {(ev.adjustments ?? []).map((a, i) => (
+            <p key={i} className="mt-2 text-xs text-amber-700">
+              {a}
+            </p>
+          ))}
+        </section>
+      )}
+
       {(ev.untranslated ?? 0) > 0 && (
         <p className="-mb-2 text-xs text-ink-400">
           피드백 {ev.untranslated}개는 번역 품질 검사를 통과하지 못해 영어 원문으로 보여요.

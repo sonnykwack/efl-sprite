@@ -39,6 +39,12 @@ pub struct CatalogEntry {
     /// LLM only: scoring prompt version measured to work best with this model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+    /// LLM only: llama-server parallel slots (default 3) and context per slot (default 8192).
+    /// Bigger models use fewer slots so the KV cache fits in memory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parallel: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ctx_per_slot: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

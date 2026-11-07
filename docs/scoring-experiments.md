@@ -211,6 +211,23 @@ Email 1-B 13/15 → 4.5, Email 2-A Language capped → ≈ 4.0.
   descriptors (0–5 per response), ideally two raters, and the report states human–human
   agreement next to human–AI agreement.
 
+## Measured language features (2026-11-07)
+Teacher: scoring still feels rough; wants length, context, vocabulary etc. used in a finer way.
+Approach (as in ETS e-rater): code measures what can be measured exactly, the LLM judges content.
+- `features.ts`: length vs minimum, lexical diversity (MATTR-50 + share of 7+-letter words,
+  repeated content words), sentence variety (share of sentences with a subordinate/relative
+  clause), accuracy (grammar-model + rule errors per 100 words), cohesion (distinct linking
+  expressions). Each → 0–5 with provisional thresholds (MATTR-50 is ~0.75–0.85 for ordinary
+  prose, so long-word share counts double).
+- Shown to the student as "언어 지표" with what was measured and a tip; given to the LLM as
+  <measured_features> before it scores.
+- Consistency check: if the LLM's Language score differs from the indicator mean (vocabulary,
+  variety, accuracy, cohesion) by ≥ 1.5, it moves ONE point toward it (shown to the student).
+- Offline: ES-1 Email 2-B → indicators 2/3/1/2/1 (mean 1.8); an LLM Language 4 becomes 3,
+  then the error-density cap applies. AD 3 strong → 5/5/5/5/2 (mean 4.25) vs LLM 3: no change.
+- Larger model option: Qwen2.5-14B-Instruct Q4_K_M (≈ 9 GB), 2 slots × 6144 ctx so the KV
+  cache fits; catalog `parallel`/`ctxPerSlot` per model.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).
