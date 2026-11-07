@@ -58,24 +58,40 @@ function useMic() {
     },
     [],
   );
+  const [opening, setOpening] = useState(false);
+  // Must be called directly from the click handler (see MicRecorder.open).
   const open = async () => {
+    if (mic.current) return true;
+    setOpening(true);
     try {
-      mic.current ??= await MicRecorder.open();
+      mic.current = await MicRecorder.open();
       return true;
     } catch (e) {
       setError(micErrorKo(e));
       return false;
+    } finally {
+      setOpening(false);
     }
   };
+  /** Shown while recording if audio is not flowing (suspended AudioContext). */
+  const audioStuck = () => !!mic.current && mic.current.recording && mic.current.state !== "running";
   const record = (maxSeconds: number, silenceStopMs: number): Promise<Recording> =>
     mic.current!.start({ maxSeconds, silenceStopMs, onLevel: setLevel });
   const stop = () => mic.current?.stop();
-  return { open, record, stop, level, error, setError, alive };
+  return { open, record, stop, level, error, setError, alive, opening, audioStuck };
 }
 
 async function save(name: string, r: Recording): Promise<string | null> {
   if (!r.heard) return null; // nothing said → no file, scores 0
   return api.saveAudio(name, r.wav);
+}
+
+function StuckNote() {
+  return (
+    <p className="text-xs text-amber-700">
+      마이크 소리가 들어오지 않고 있어요. 창을 한 번 클릭해 보세요. 계속 안 되면 앱을 다시 실행해 주세요.
+    </p>
+  );
 }
 
 // ------------------------------------------------------------------ Listen and Repeat
@@ -97,7 +113,7 @@ export function RepeatTask({
   onDone: (r: SpeakingResult) => void;
   onQuit: () => void;
 }) {
-  const { open, record, stop, level, error, setError, alive } = useMic();
+  const { open, record, stop, level, error, setError, alive, opening, audioStuck } = useMic();
   const [step, setStep] = useState<RepeatStep>({ kind: "intro" });
   const [showText, setShowText] = useState(!ttsAvailable());
   const [now, setNow] = useState(performance.now());
@@ -171,8 +187,8 @@ export function RepeatTask({
               <li>처음 시작할 때 마이크 사용 허락을 물어볼 수 있어요.</li>
             </ul>
             <div className="flex gap-2">
-              <button className={primary} onClick={begin}>
-                시작
+              <button className={primary} onClick={begin} disabled={opening}>
+                {opening ? "마이크 준비 중…" : "시작"}
               </button>
               <button className={ghost} onClick={onQuit}>
                 돌아가기
@@ -197,6 +213,7 @@ export function RepeatTask({
               )}
             </div>
             {step.kind === "record" && <LevelMeter level={level} />}
+            {step.kind === "record" && audioStuck() && <StuckNote />}
             {showText && (
               <p className="rounded-lg bg-sprite-50 p-3 text-lg" data-selectable>
                 {sentences[i]}
@@ -240,7 +257,7 @@ export function InterviewTask({
   onDone: (r: SpeakingResult) => void;
   onQuit: () => void;
 }) {
-  const { open, record, stop, level, error, setError, alive } = useMic();
+  const { open, record, stop, level, error, setError, alive, opening, audioStuck } = useMic();
   const [step, setStep] = useState<InterviewStep>({ kind: "intro" });
   const [now, setNow] = useState(performance.now());
   useEffect(() => {
@@ -298,8 +315,8 @@ export function InterviewTask({
               <li>답변 시간은 {task.responseSeconds}초예요. 일찍 끝나면 "답변 완료"를 누르세요.</li>
             </ul>
             <div className="flex gap-2">
-              <button className={primary} onClick={begin}>
-                시작
+              <button className={primary} onClick={begin} disabled={opening}>
+                {opening ? "마이크 준비 중…" : "시작"}
               </button>
               <button className={ghost} onClick={onQuit}>
                 돌아가기
@@ -320,6 +337,7 @@ export function InterviewTask({
             {step.kind === "record" && (
               <>
                 <LevelMeter level={level} />
+                {audioStuck() && <StuckNote />}
                 <div>
                   <button className={primary} onClick={stop}>
                     답변 완료
