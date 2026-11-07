@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy these three values from Partner Center → EFL Sprite → Product management → Product identity. Placeholders until then (test packages only).",
+  "name": "Xogns.EFLSprite",
+  "publisher": "CN=Xogns",
+  "publisherDisplayName": "Xogns"
+}

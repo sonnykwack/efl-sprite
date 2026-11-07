@@ -61,6 +61,21 @@ jobs:
       - name: Build app
         run: npx tauri build
 
+      # Microsoft Store package (see scripts/make-msix.ps1). Unsigned → Partner Center,
+      # *_test.msix + .cer → local install test.
+      - name: Build MSIX
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: ./scripts/make-msix.ps1
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.name == 'windows'
+        with:
+          name: efl-sprite-msix
+          path: src-tauri/target/release/msix
+          if-no-files-found: error
+          retention-days: 14
+
       - uses: actions/upload-artifact@v4
         with:
           name: efl-sprite-${{ matrix.name }}
