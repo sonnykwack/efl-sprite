@@ -41,7 +41,7 @@ Copy-Item $exe $layout
 $engines = Join-Path $tauri "engines\windows"
 if (-not (Test-Path $engines)) { throw "$engines not found — run 'npm run fetch-engines' first" }
 Copy-Item $engines (Join-Path $layout "engines") -Recurse
-foreach ($icon in "StoreLogo.png", "Square44x44Logo.png", "Square71x71Logo.png", "Square150x150Logo.png", "Square310x310Logo.png") {
+foreach ($icon in "StoreLogo.png", "Square44x44Logo.png", "Square71x71Logo.png", "Square150x150Logo.png", "Square310x310Logo.png", "Wide310x150Logo.png") {
   Copy-Item (Join-Path $tauri "icons\$icon") (Join-Path $layout "Assets\$icon")
 }
 
