@@ -1,6 +1,7 @@
-export type PageKey = "tasks" | "attempt" | "result" | "history" | "settings";
+export type PageKey = "home" | "tasks" | "attempt" | "result" | "history" | "settings";
 
 const ITEMS: { key: PageKey; label: string; hint: string }[] = [
+  { key: "home", label: "시작하기", hint: "Start" },
   { key: "tasks", label: "문제 관리", hint: "Tasks" },
   { key: "attempt", label: "응시", hint: "Practice" },
   { key: "result", label: "채점 결과", hint: "Feedback" },

@@ -6,6 +6,8 @@ import { api, inTauri } from "../lib/api";
 import type { AppInfo, DownloadProgress, ModelEntry } from "../lib/types";
 
 const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(0);
+/** Developers fetch engines; users only ever see a reinstall hint. */
+const missing = (dev: string) => (import.meta.env.DEV ? `❌ 없음 — ${dev}` : "❌ 없음 — 앱을 다시 설치해 주세요");
 
 export default function SettingsPage() {
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -88,11 +90,11 @@ export default function SettingsPage() {
             {info.platform} / {info.arch}
           </div>
           <div className="text-ink-400">Whisper 엔진</div>
-          <div>{info.engines.whisper ? "✅ 설치됨" : "❌ 없음 — npm run fetch-engines"}</div>
+          <div>{info.engines.whisper ? "✅ 설치됨" : missing("npm run fetch-engines")}</div>
           <div className="text-ink-400">LLM 엔진 (llama-server)</div>
-          <div>{info.engines.llama ? "✅ 설치됨" : "❌ 없음 — npm run fetch-engines"}</div>
+          <div>{info.engines.llama ? "✅ 설치됨" : missing("npm run fetch-engines")}</div>
           <div className="text-ink-400">문법 모델 런타임 (ONNX)</div>
-          <div>{info.engines.onnxruntime ? "✅ 설치됨" : "❌ 없음 — npm run fetch-engines -- --only=ort"}</div>
+          <div>{info.engines.onnxruntime ? "✅ 설치됨" : missing("npm run fetch-engines -- --only=ort")}</div>
           <div className="text-ink-400">모델 폴더</div>
           <div className="truncate" data-selectable title={info.modelsDir}>
             {info.modelsDir}
