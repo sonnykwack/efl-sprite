@@ -197,6 +197,20 @@ Email 1-B 13/15 → 4.5, Email 2-A Language capped → ≈ 4.0.
   whose words the rewrite no longer contains; "in → in the" inside "Please stop … in morning"
   is kept.
 
+## Reference standard (2026-11-07)
+- The teacher's ES-1 bands were holistic personal judgments on a 1–6 scale, not an application
+  of the ETS rubric (the teacher has not taken the 2026 test). So the agreement figures so far
+  measure "agreement with one experienced instructor", not "agreement with ETS".
+- ETS's published guide for Write an Email / Academic Discussion is holistic, one 0–5 score per
+  response (5 fully successful … 1 unsuccessful/telegraphic … 0 blank or off-topic); the app's
+  3 analytic criteria + band table are our own design.
+- Email 2-B after all fixes: 7/15 → band 2.5 (teacher 1.5). By the ETS descriptors it is
+  intelligible and does the task with noticeable errors and little elaboration (≈ 2–3 of 5),
+  so the gap is not tuned away.
+- Decision: freeze scoring changes; for the final held-out set the rater(s) score with the ETS
+  descriptors (0–5 per response), ideally two raters, and the report states human–human
+  agreement next to human–AI agreement.
+
 ### Caveat
 AD-1 informed the v2/v3 prompt design, so it is no longer an unbiased test. Final numbers for
 the report must come from held-out responses scored by the teacher (plan: Day 10, 11/12).
