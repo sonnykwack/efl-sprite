@@ -1,8 +1,13 @@
 // 응시: pick student + task → do the task with a timer → submit → score → result page.
-// Writing tasks are fully supported; speaking tasks arrive with microphone recording.
+// Writing: timed text box. Speaking: OS voice + microphone (SpeakingTasks.tsx) → Whisper →
+// Listen and Repeat is scored by word accuracy (repeat.ts), Interview by the LLM pipeline.
 import { useEffect, useRef, useState } from "react";
 import type { Navigate } from "../App";
 import PageHeader from "../components/PageHeader";
+import { InterviewTask, RepeatTask, type SpeakingResult } from "../components/SpeakingTasks";
+import { targetSentences } from "../lib/accuracy";
+import { scoreRepeatAttempt } from "../lib/repeat";
+import { speakingStats, type SpeakingStats } from "../lib/scoring";
 import { api, inTauri } from "../lib/api";
 import { loadActiveModels, type ActiveModels } from "../lib/activeModels";
 import { fmtClock, wordCount } from "../lib/format";
@@ -22,7 +27,26 @@ const ghost = `${btn} border border-black/10 text-ink-600 hover:bg-sprite-50`;
 type Phase =
   | { kind: "pick" }
   | { kind: "doing"; task: Task; startedAt: number; draft?: string }
-  | { kind: "scoring"; task: Task; attemptId: number; responseText: string; stage: Stage; startedAt: number; error?: string };
+  | {
+      kind: "scoring";
+      task: Task;
+      attemptId: number;
+      responseText: string;
+      stage: Stage;
+      startedAt: number;
+      error?: string;
+      stats?: SpeakingStats;
+      /** listen_repeat: which sentence is being transcribed */
+      note?: string;
+    };
+
+/** Stages shown on the progress screen, per task type. */
+const ORDER: Record<Task["taskType"], Stage[]> = {
+  listen_repeat: ["saving", "transcribing"],
+  interview: ["transcribing", "saving", "grammar", "loading", "scoring", "translating"],
+  email: ["saving", "grammar", "loading", "scoring", "translating"],
+  academic_discussion: ["saving", "grammar", "loading", "scoring", "translating"],
+};
 
 export default function AttemptPage({ navigate }: { navigate: Navigate }) {
   const [phase, setPhase] = useState<Phase>({ kind: "pick" });
@@ -52,14 +76,14 @@ export default function AttemptPage({ navigate }: { navigate: Navigate }) {
     }
   };
 
-  const runScoring = async (task: Task, attemptId: number, responseText: string) => {
+  const runScoring = async (task: Task, attemptId: number, responseText: string, stats?: SpeakingStats) => {
     const startedAt = performance.now();
     const set = (stage: Stage, err?: string) =>
-      setPhase({ kind: "scoring", task, attemptId, responseText, stage, startedAt, error: err });
+      setPhase({ kind: "scoring", task, attemptId, responseText, stage, startedAt, error: err, stats });
     set("loading");
     try {
       await scoreAttempt(
-        { attemptId, taskType: task.taskType, prompt: task.prompt, material: task.material, responseText },
+        { attemptId, taskType: task.taskType, prompt: task.prompt, material: task.material, responseText, stats },
         mode,
         (s) => set(s),
       );
@@ -88,6 +112,58 @@ export default function AttemptPage({ navigate }: { navigate: Navigate }) {
     }
   };
 
+  /** Listen and Repeat: save the attempt (audio paths), then transcribe + score each sentence. */
+  const submitRepeat = async (task: Task, r: SpeakingResult) => {
+    const startedAt = performance.now();
+    const base = { kind: "scoring" as const, task, responseText: "", startedAt };
+    setPhase({ ...base, attemptId: -1, stage: "saving" });
+    let attemptId = -1;
+    try {
+      attemptId = await api.createAttempt({
+        taskId: task.id,
+        studentId,
+        responseText: "",
+        audioPath: JSON.stringify(r.audioPaths),
+        durationSeconds: Math.round(r.seconds),
+      });
+      const sentences = targetSentences(task.material);
+      await scoreRepeatAttempt(attemptId, sentences, r.audioPaths, (done, total) =>
+        setPhase({ ...base, attemptId, stage: "transcribing", note: `${Math.min(done + 1, total)} / ${total} 문장` }),
+      );
+      navigate({ page: "result", attemptId });
+    } catch (e) {
+      setPhase({ ...base, attemptId, stage: attemptId > 0 ? "transcribing" : "saving", error: String(e) });
+    }
+  };
+
+  /** Interview: transcribe first (the transcript IS the response), save, then LLM scoring. */
+  const submitInterview = async (task: Task, r: SpeakingResult) => {
+    const startedAt = performance.now();
+    const path = r.audioPaths[0];
+    if (!path) {
+      setError("목소리가 녹음되지 않았어요. 마이크를 확인하고 다시 시도해 주세요.");
+      setPhase({ kind: "pick" });
+      return;
+    }
+    setPhase({ kind: "scoring", task, attemptId: -1, responseText: "", stage: "transcribing", startedAt });
+    try {
+      if (!active?.whisper) throw new Error("설치된 음성 인식(Whisper) 모델이 없습니다.");
+      const transcript = (await api.transcribe(path, active.whisper.id)).trim();
+      const stats = speakingStats(transcript, r.seconds);
+      setPhase({ kind: "scoring", task, attemptId: -1, responseText: transcript, stage: "saving", startedAt, stats });
+      const attemptId = await api.createAttempt({
+        taskId: task.id,
+        studentId,
+        responseText: transcript,
+        audioPath: path,
+        durationSeconds: Math.round(r.seconds),
+      });
+      await runScoring(task, attemptId, transcript, stats);
+    } catch (e) {
+      setPhase({ kind: "scoring", task, attemptId: -1, responseText: "", stage: "transcribing", startedAt, error: String(e) });
+    }
+  };
+
   if (!inTauri()) {
     return (
       <>
@@ -97,6 +173,21 @@ export default function AttemptPage({ navigate }: { navigate: Navigate }) {
     );
   }
 
+  if (phase.kind === "doing" && phase.task.taskType === "listen_repeat") {
+    const task = phase.task;
+    return (
+      <RepeatTask
+        task={task}
+        sentences={targetSentences(task.material)}
+        onDone={(r) => submitRepeat(task, r)}
+        onQuit={() => setPhase({ kind: "pick" })}
+      />
+    );
+  }
+  if (phase.kind === "doing" && phase.task.taskType === "interview") {
+    const task = phase.task;
+    return <InterviewTask task={task} onDone={(r) => submitInterview(task, r)} onQuit={() => setPhase({ kind: "pick" })} />;
+  }
   if (phase.kind === "doing") {
     return (
       <WritingTask
@@ -113,7 +204,11 @@ export default function AttemptPage({ navigate }: { navigate: Navigate }) {
     return (
       <Scoring
         phase={phase}
-        onRetry={() => runScoring(phase.task, phase.attemptId, phase.responseText)}
+        onRetry={() =>
+          phase.task.taskType === "listen_repeat" || phase.attemptId < 0
+            ? setPhase({ kind: "pick" })
+            : runScoring(phase.task, phase.attemptId, phase.responseText, phase.stats)
+        }
         onSkip={() => navigate({ page: "result", attemptId: phase.attemptId })}
       />
     );
@@ -125,6 +220,15 @@ export default function AttemptPage({ navigate }: { navigate: Navigate }) {
     <>
       <PageHeader title="응시" subtitle="학생과 문제를 고르면 바로 시작합니다." />
 
+      {active && !active.whisper && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+          스피킹 문제를 풀려면 음성 인식(Whisper) 모델이 필요해요.{" "}
+          <button className="font-semibold text-sprite-700 underline" onClick={() => navigate({ page: "settings" })}>
+            설정 · 모델
+          </button>
+          에서 다운로드해 주세요.
+        </div>
+      )}
       {!active?.llm && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
           채점용 LLM 모델이 설치되어 있지 않아요.{" "}
@@ -203,11 +307,13 @@ export default function AttemptPage({ navigate }: { navigate: Navigate }) {
         <ul className="grid gap-2">
           {tasks.map((t) => {
             const spec = TASK_SPECS[t.taskType];
-            const ready = spec.section === "writing";
+            // What each task type needs: writing → LLM, listen_repeat → Whisper, interview → both.
+            const needs = { whisper: spec.section === "speaking", llm: t.taskType !== "listen_repeat" };
+            const ready = (!needs.whisper || !!active?.whisper) && (!needs.llm || !!active?.llm);
             return (
               <li key={t.id}>
                 <button
-                  disabled={!ready || !active?.llm}
+                  disabled={!ready}
                   onClick={() => {
                     setError(null);
                     setPhase({ kind: "doing", task: t, startedAt: performance.now() });
@@ -220,7 +326,7 @@ export default function AttemptPage({ navigate }: { navigate: Navigate }) {
                     </div>
                     <div className="truncate font-semibold">{t.title}</div>
                   </div>
-                  <span className="shrink-0 text-xs text-ink-400">{ready ? "시작 →" : "녹음 기능 준비 중"}</span>
+                  <span className="shrink-0 text-xs text-ink-400">{ready ? "시작 →" : needs.whisper && !active?.whisper ? "Whisper 모델 필요" : "LLM 모델 필요"}</span>
                 </button>
               </li>
             );
@@ -371,7 +477,7 @@ function Scoring({
     const id = setInterval(() => setNow(performance.now()), 500);
     return () => clearInterval(id);
   }, [phase.error]);
-  const order: Stage[] = ["saving", "grammar", "loading", "scoring", "translating"];
+  const order = ORDER[phase.task.taskType];
   const at = order.indexOf(phase.stage);
 
   return (
@@ -391,6 +497,7 @@ function Scoring({
               {i < at ? "✓" : ""}
             </span>
             {STAGE_KO[s]}
+            {i === at && phase.note && <span className="text-ink-400">{phase.note}</span>}
           </li>
         ))}
       </ol>

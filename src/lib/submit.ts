@@ -8,10 +8,11 @@ import type { GecEdit, TaskType } from "./types";
 export type ScoringMode = "quick" | "precise";
 export const SAMPLES: Record<ScoringMode, number> = { quick: 1, precise: 3 };
 
-export type Stage = "saving" | "grammar" | "loading" | "scoring" | "translating" | "done";
+export type Stage = "saving" | "transcribing" | "grammar" | "loading" | "scoring" | "translating" | "done";
 
 export const STAGE_KO: Record<Stage, string> = {
   saving: "답안 저장 중…",
+  transcribing: "음성을 글로 옮기는 중… (Whisper)",
   grammar: "문법 모델로 오류를 찾는 중…",
   loading: "AI 모델 준비 중… (처음 한 번은 오래 걸려요)",
   scoring: "AI가 답안을 읽고 채점하는 중…",

@@ -31,6 +31,10 @@ export const api = {
   // Engines
   transcribe: (wavPath: string, modelId: string) =>
     invoke<string>("transcribe", { wavPath, modelId }),
+  /** Save a recorded answer (WAV bytes); returns its path for `attempts.audio_path`. */
+  saveAudio: (name: string, wav: Uint8Array) => invoke<string>("save_audio", { name, data: Array.from(wav) }),
+  /** Read a saved recording back (only files in the app's audio folder). */
+  readAudio: (path: string) => invoke<ArrayBuffer>("read_audio", { path }),
   llmStart: (modelId: string) => invoke<number>("llm_start", { modelId }),
   llmStop: () => invoke<void>("llm_stop"),
   llmChat: (messages: ChatMessage[], jsonSchema?: unknown) =>

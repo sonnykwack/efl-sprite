@@ -22,6 +22,13 @@ pub fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Recorded answers (16 kHz WAV).
+pub fn audio_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = data_dir(app)?.join("audio");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    Ok(dir)
+}
+
 pub fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir(app)?.join("efl-sprite.sqlite3"))
 }

@@ -96,6 +96,12 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
 - Precision first: when GEC ran, LLM corrections are limited to word_choice / register /
   run_on / possessive / word_form (`LLM_CATEGORIES_WITH_GEC`) and each is re-judged by a
   separate call (`verify.ts`, reason → verdict; failure = drop). Grammar = GEC + rules only.
+- Speaking capture: `recorder.ts` (getUserMedia + ScriptProcessor → `wav.ts` box resample to
+  16 kHz, silence trim, PCM16 WAV — same code on WebView2 and WKWebView, no MediaRecorder),
+  Rust `audio.rs` saves to `<data_dir>/audio/` (ASCII names; `read_audio` limited to that
+  folder). Prompts read by the OS voice (`speech.ts`, Web Speech API); text fallback.
+  Listen & Repeat: `repeat.ts` (Whisper per sentence → word accuracy → 0–5 per sentence →
+  band; audio_path = JSON array). Interview: transcript + `speakingStats` → LLM pipeline.
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.
 

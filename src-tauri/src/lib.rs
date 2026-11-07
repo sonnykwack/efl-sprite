@@ -1,3 +1,4 @@
+mod audio;
 mod db;
 mod engine;
 mod models;
@@ -59,6 +60,8 @@ pub fn run() {
             models::download_model,
             models::delete_model,
             engine::whisper::transcribe,
+            audio::save_audio,
+            audio::read_audio,
             engine::llama::llm_start,
             engine::llama::llm_chat,
             engine::llama::llm_stop,
