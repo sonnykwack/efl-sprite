@@ -44,6 +44,10 @@ export const api = {
   gecCheck: (modelId: string, text: string, options?: GecOptions) =>
     invoke<GecResult>("gec_check", { modelId, text, options: options ?? null }),
 
+  // Task pack files (.eflsprite) — path comes from the OS file dialog
+  readTaskFile: (path: string) => invoke<string>("read_task_file", { path }),
+  writeTaskFile: (path: string, contents: string) => invoke<void>("write_task_file", { path, contents }),
+
   // Tasks (문제)
   listTasks: () => invoke<Task[]>("list_tasks"),
   createTask: (task: NewTask) => invoke<number>("create_task", { task }),

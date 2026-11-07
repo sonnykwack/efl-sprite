@@ -1,0 +1,41 @@
+{
+  "format": "efl-sprite-tasks",
+  "version": 1,
+  "title": "EFL Sprite 샘플 문제 팩",
+  "author": "EFL Sprite",
+  "createdAt": "2026-11-07T00:00:00.000Z",
+  "tasks": [
+    {
+      "taskType": "listen_repeat",
+      "title": "샘플 팩 · Listen & Repeat — Library tour",
+      "prompt": "You are new at the university. A librarian is showing you around the library. Listen to each sentence and repeat it exactly.",
+      "material": "Welcome to the main library.\nThe front desk is open until ten.\nYou can borrow up to five books at a time.\nQuiet study rooms are on the second floor.\nPlease return your books before the due date.",
+      "prepSeconds": 0,
+      "responseSeconds": 10
+    },
+    {
+      "taskType": "interview",
+      "title": "샘플 팩 · Interview — Where do you study?",
+      "prompt": "Some students prefer to study in a library, while others prefer to study at home. Which do you prefer, and why? Give specific reasons and examples.",
+      "material": null,
+      "prepSeconds": 0,
+      "responseSeconds": 45
+    },
+    {
+      "taskType": "email",
+      "title": "샘플 팩 · Email — Group project problem",
+      "prompt": "You are taking a biology class. One member of your project group has not done his part, and the presentation is next Tuesday. Write an email to your professor, Dr. Lee.\n\nIn your email, do the following:\n- explain the problem\n- describe what your group has already tried\n- ask for advice or a solution",
+      "material": null,
+      "prepSeconds": 0,
+      "responseSeconds": 420
+    },
+    {
+      "taskType": "academic_discussion",
+      "title": "샘플 팩 · Academic Discussion — Phones in class",
+      "prompt": "Your professor is teaching a class on education. Write a post responding to the professor's question.\n\nDr. Park: Many schools are banning smartphones during class. Supporters say phones distract students, while others say phones can be useful learning tools. Should schools ban phones in class? Why or why not?",
+      "material": "Mina: I think phones should be banned. Even when students use them for class, they end up checking messages and games, and it is hard for teachers to notice.\nDaniel: I disagree. Phones let us look up information instantly and use learning apps. Schools should teach students how to use phones responsibly instead of banning them.",
+      "prepSeconds": 0,
+      "responseSeconds": 600
+    }
+  ]
+}

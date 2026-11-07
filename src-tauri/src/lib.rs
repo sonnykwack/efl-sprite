@@ -1,4 +1,5 @@
 mod audio;
+mod taskfile;
 mod db;
 mod engine;
 mod models;
@@ -46,6 +47,7 @@ fn app_info(app: AppHandle) -> Result<AppInfo, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(engine::llama::LlamaState::default())
         .manage(models::Downloads::default())
         .manage(engine::gec::GecState::default())
@@ -62,6 +64,8 @@ pub fn run() {
             engine::whisper::transcribe,
             audio::save_audio,
             audio::read_audio,
+            taskfile::read_task_file,
+            taskfile::write_task_file,
             engine::llama::llm_start,
             engine::llama::llm_chat,
             engine::llama::llm_stop,

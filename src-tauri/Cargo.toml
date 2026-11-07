@@ -16,6 +16,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 # preserve_order: JSON schemas keep their key order on the way to llama-server, so the
 # grammar makes the model write `evidence` BEFORE `score` (see CLAUDE.md, scoring design).

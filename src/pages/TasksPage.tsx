@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader";
+import TaskShare from "../components/TaskShare";
 import { api, inTauri } from "../lib/api";
 import { targetSentences } from "../lib/accuracy";
 import { TASK_SPECS, TASK_TYPES_BY_SECTION } from "../lib/rubrics";
@@ -24,6 +25,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [draft, setDraft] = useState<NewTask>(emptyDraft("interview"));
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<number> | null>(null);
   const spec = TASK_SPECS[draft.taskType];
 
   const refresh = () => {
@@ -67,6 +69,8 @@ export default function TasksPage() {
   return (
     <>
       <PageHeader title="문제 관리" subtitle="TOEFL iBT(2026) 형식의 스피킹·라이팅 문제를 등록합니다." />
+
+      {inTauri() && <TaskShare tasks={tasks} selected={selected} setSelected={setSelected} onChanged={refresh} />}
 
       <section className="mb-8 grid gap-4 rounded-xl bg-white p-5 shadow-sm">
         {/* Type picker: two sections × two task types */}
@@ -164,7 +168,20 @@ export default function TasksPage() {
             t.taskType === "listen_repeat" ? ` · ${targetSentences(t.material).length}문장` : "";
           return (
             <li key={t.id} className="flex items-start justify-between gap-4 rounded-xl bg-white p-4 shadow-sm">
-              <div className="min-w-0">
+              {selected && (
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 accent-sprite-500"
+                  checked={selected.has(t.id)}
+                  onChange={(e) => {
+                    const next = new Set(selected);
+                    if (e.target.checked) next.add(t.id);
+                    else next.delete(t.id);
+                    setSelected(next);
+                  }}
+                />
+              )}
+              <div className="min-w-0 flex-1">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-sprite-600">
                   {t.section} · {s?.label ?? t.taskType}
                   <span className="ml-2 font-normal normal-case text-ink-400">
