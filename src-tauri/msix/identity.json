@@ -1,6 +1,6 @@
 {
-  "_comment": "Copy these three values from Partner Center → EFL Sprite → Product management → Product identity. Placeholders until then (test packages only).",
-  "name": "Xogns.EFLSprite",
-  "publisher": "CN=Xogns",
-  "publisherDisplayName": "Xogns"
+  "_comment": "From Partner Center → EFL Sprite → Product identity (Store ID 9MZT0SB40M2W, PFN TaehoonKwack.EFLSprite_2xfcjv2gqkfpp). Must match exactly or the upload is rejected.",
+  "name": "TaehoonKwack.EFLSprite",
+  "publisher": "CN=24C9C67C-B9E9-4C6E-BB3C-9A1870C23B35",
+  "publisherDisplayName": "Taehoon Kwack"
 }
