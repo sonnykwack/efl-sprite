@@ -6,6 +6,7 @@ import ResultPage from "./pages/ResultPage";
 import HistoryPage from "./pages/HistoryPage";
 import SettingsPage from "./pages/SettingsPage";
 import HomePage from "./pages/HomePage";
+import ReviewPage from "./pages/ReviewPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 export interface Route {
@@ -21,7 +22,7 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar current={route.page} onNavigate={(page) => navigate({ page })} />
+      <Sidebar current={route.page === "review" ? "result" : route.page} onNavigate={(page) => navigate({ page })} />
       <main className="flex-1 overflow-y-auto px-10 py-8">
         <ErrorBoundary resetKey={`${route.page}:${route.attemptId ?? ""}`}>
           {route.page === "home" && <HomePage navigate={navigate} />}
@@ -29,7 +30,8 @@ export default function App() {
           {route.page === "attempt" && <AttemptPage navigate={navigate} />}
           {/* key: remount when a different attempt is opened */}
           {route.page === "result" && <ResultPage key={route.attemptId ?? 0} attemptId={route.attemptId} navigate={navigate} />}
-          {route.page === "history" && <HistoryPage navigate={navigate} />}
+          {route.page === "review" && route.attemptId != null && <ReviewPage key={route.attemptId} attemptId={route.attemptId} navigate={navigate} />}
+        {route.page === "history" && <HistoryPage navigate={navigate} />}
           {route.page === "settings" && <SettingsPage />}
         </ErrorBoundary>
       </main>

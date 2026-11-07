@@ -86,6 +86,10 @@ const MIGRATIONS: &[&str] = &[
     DROP TABLE tasks;
     ALTER TABLE tasks_new RENAME TO tasks;
     "#,
+    // v3: teacher's own corrections + verdicts on AI corrections (JSON, src/lib/review.ts).
+    r#"
+    ALTER TABLE attempts ADD COLUMN teacher_review TEXT;
+    "#,
 ];
 
 pub fn open(app: &AppHandle) -> Result<Db, String> {

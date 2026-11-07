@@ -80,6 +80,7 @@ pub fn run() {
             records::set_sample_answer,
             records::set_teacher_score,
             records::get_attempt,
+            records::set_teacher_review,
             records::list_attempts,
         ])
         .build(tauri::generate_context!())

@@ -67,6 +67,7 @@ export function CorrectionDetail({ e, onClose }: { e: LanguageError; onClose?: (
         <span className="rounded bg-sprite-50 px-1.5 py-0.5 text-xs font-semibold text-sprite-700">{info.label}</span>
         {e.source === "rule" && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-700">규칙 검사</span>}
         {e.source === "gec" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-700">문법 모델</span>}
+        {e.source === "teacher" && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">선생님</span>}
         {onClose && (
           <button onClick={onClose} className="ml-auto text-xs text-ink-400 hover:text-ink-900">
             닫기 ✕
@@ -152,6 +153,7 @@ export function CorrectionList({ errors, selected = null, onSelect }: { errors: 
               <span className="mr-1.5 rounded bg-white px-1.5 text-[10px] text-ink-600 ring-1 ring-black/5">{info.label}</span>
               {e.source === "rule" && <span className="mr-1.5 rounded bg-sky-100 px-1.5 text-[10px] text-sky-700">규칙</span>}
               {e.source === "gec" && <span className="mr-1.5 rounded bg-emerald-100 px-1.5 text-[10px] text-emerald-700">문법 모델</span>}
+              {e.source === "teacher" && <span className="mr-1.5 rounded bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-700">선생님</span>}
               <Diff before={e.quote} after={e.correction} />
               {!e.located && <span className="text-xs"> (답안에서 찾을 수 없음)</span>}
               {e.why && !open && <span className="mt-0.5 block text-xs text-ink-400">{e.why}</span>}

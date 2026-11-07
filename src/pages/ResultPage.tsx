@@ -15,6 +15,7 @@ import { TASK_SPECS } from "../lib/rubrics";
 import { generateSampleAnswer, speakingStats, type LlmEvaluation } from "../lib/scoring";
 import { STAGE_KO, scoreAttempt, type ScoringMode, type Stage } from "../lib/submit";
 import type { AttemptDetail, AttemptSummary } from "../lib/types";
+import { effectiveErrors, parseReview } from "../lib/review";
 
 const BANDS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6];
 const btn = "rounded-lg px-3 py-1.5 text-sm font-semibold transition disabled:opacity-40";
@@ -84,6 +85,10 @@ export default function ResultPage({ attemptId, navigate }: { attemptId?: number
     ev = null;
   }
   const isRepeat = detail.taskType === "listen_repeat";
+  // Teacher corrections replace/override AI corrections (see review.ts).
+  const review = parseReview(detail.teacherReview);
+  const reviewed = review.annotations.length > 0 || Object.keys(review.aiVerdicts).length > 0;
+  if (ev) ev = { ...ev, errors: effectiveErrors(ev.errors, review) };
 
   const rescore = async (mode: ScoringMode) => {
     setError(null);
@@ -161,11 +166,23 @@ export default function ResultPage({ attemptId, navigate }: { attemptId?: number
         title={detail.taskTitle}
         subtitle={`${spec.label} · ${detail.studentName ?? "이름 없음"} · ${fmtDate(detail.createdAt)}`}
         actions={
-          <button className={`${btn} border border-black/10 text-ink-600`} onClick={() => navigate({ page: "history" })}>
-            ← 기록
-          </button>
+          <div className="flex gap-2">
+            {!isRepeat && (
+              <button className={`${btn} bg-violet-600 text-white hover:bg-violet-700`} onClick={() => navigate({ page: "review", attemptId: detail.id })}>
+                ✏️ {reviewed ? "첨삭 이어하기" : "직접 첨삭"}
+              </button>
+            )}
+            <button className={`${btn} border border-black/10 text-ink-600`} onClick={() => navigate({ page: "history" })}>
+              ← 기록
+            </button>
+          </div>
         }
       />
+      {reviewed && !isRepeat && (
+        <p className="mb-4 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
+          선생님 첨삭 {review.annotations.length}개가 반영되었어요. 선생님이 틀렸다고 표시한 AI 교정은 숨겨졌어요.
+        </p>
+      )}
 
       {!ev && !rep && (
         <section className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">

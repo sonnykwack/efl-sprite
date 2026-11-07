@@ -1,4 +1,4 @@
-export type PageKey = "home" | "tasks" | "attempt" | "result" | "history" | "settings";
+export type PageKey = "home" | "review" | "tasks" | "attempt" | "result" | "history" | "settings";
 
 const ITEMS: { key: PageKey; label: string; hint: string }[] = [
   { key: "home", label: "시작하기", hint: "Start" },

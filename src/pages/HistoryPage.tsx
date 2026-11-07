@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Navigate } from "../App";
 import PageHeader from "../components/PageHeader";
+import { aiPrecision, parseReview } from "../lib/review";
 import { api, inTauri } from "../lib/api";
 import { fmtDate } from "../lib/format";
 import { TASK_SPECS } from "../lib/rubrics";
@@ -22,6 +23,12 @@ export default function HistoryPage({ navigate }: { navigate: Navigate }) {
     if (!inTauri()) return;
     api.listAttempts(studentId).then(setRows).catch((e) => setError(String(e)));
   }, [studentId]);
+
+  // Teacher-judged precision of AI corrections (✓/✗ on the 첨삭 page).
+  const precision = useMemo(() => {
+    const { ok, wrong } = aiPrecision(rows.map((r) => parseReview(r.teacherReview)));
+    return ok + wrong > 0 ? { ok, wrong, p: ok / (ok + wrong) } : null;
+  }, [rows]);
 
   const agreement = useMemo(() => {
     const pairs = rows.filter((r) => r.band != null && r.teacherScore != null) as Required<AttemptSummary>[];
@@ -64,6 +71,12 @@ export default function HistoryPage({ navigate }: { navigate: Navigate }) {
             value={Math.abs(agreement.bias) < 0.25 ? "치우침 없음" : agreement.bias > 0 ? `+${agreement.bias.toFixed(2)} 후함` : `${agreement.bias.toFixed(2)} 박함`}
           />
         </section>
+      )}
+      {precision && (
+        <p className="-mt-3 mb-6 text-xs text-ink-600">
+          교사 검토 기준 AI 교정 정확도: <span className="font-semibold">{Math.round(precision.p * 100)}%</span> (맞음 {precision.ok} · 틀림{" "}
+          {precision.wrong})
+        </p>
       )}
 
       <div className="overflow-hidden rounded-xl bg-white shadow-sm">

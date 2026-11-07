@@ -124,6 +124,8 @@ pub struct AttemptDetail {
     pub audio_path: Option<String>,
     pub duration_seconds: Option<f64>,
     pub created_at: String,
+    /// Teacher review JSON (corrections + verdicts on AI corrections), if any.
+    pub teacher_review: Option<String>,
     /// Latest evaluation, if the attempt has been scored.
     pub evaluation: Option<EvaluationRow>,
 }
@@ -140,6 +142,8 @@ pub struct AttemptSummary {
     pub teacher_score: Option<f64>,
     /// Per-criterion scores of the latest evaluation (for refitting the band table).
     pub criterion_scores: Option<Vec<f64>>,
+    /// Teacher review JSON (for the AI-correction precision figure on History).
+    pub teacher_review: Option<String>,
 }
 
 /// `criteria[].score` from a stored evaluation JSON; None if it has no criteria.
@@ -175,7 +179,7 @@ pub fn attempt(conn: &Connection, id: i64) -> R<AttemptDetail> {
     let mut d = conn
         .query_row(
             "SELECT a.id, a.task_id, t.title, t.section, t.task_type, t.prompt, t.material, \
-                    a.student_id, s.name, a.response_text, a.audio_path, a.duration_seconds, a.created_at \
+                    a.student_id, s.name, a.response_text, a.audio_path, a.duration_seconds, a.created_at, a.teacher_review \
              FROM attempts a JOIN tasks t ON t.id = a.task_id LEFT JOIN students s ON s.id = a.student_id \
              WHERE a.id = ?1",
             params![id],
@@ -194,6 +198,7 @@ pub fn attempt(conn: &Connection, id: i64) -> R<AttemptDetail> {
                     audio_path: r.get(10)?,
                     duration_seconds: r.get(11)?,
                     created_at: r.get(12)?,
+                    teacher_review: r.get(13)?,
                     evaluation: None,
                 })
             },
@@ -212,7 +217,8 @@ pub fn attempts(conn: &Connection, student_id: Option<i64>, limit: i64) -> R<Vec
             "SELECT a.id, a.created_at, s.name, t.title, t.task_type, \
                     (SELECT total_score FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1), \
                     (SELECT teacher_score FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1), \
-                    (SELECT rubric_json FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1) \
+                    (SELECT rubric_json FROM evaluations v WHERE v.attempt_id = a.id ORDER BY v.id DESC LIMIT 1), \
+                    a.teacher_review \
              FROM attempts a JOIN tasks t ON t.id = a.task_id LEFT JOIN students s ON s.id = a.student_id \
              WHERE (?1 IS NULL OR a.student_id = ?1) \
              ORDER BY a.id DESC LIMIT ?2",
@@ -229,6 +235,7 @@ pub fn attempts(conn: &Connection, student_id: Option<i64>, limit: i64) -> R<Vec
                 band: r.get(5)?,
                 teacher_score: r.get(6)?,
                 criterion_scores: criterion_scores(r.get(7)?),
+                teacher_review: r.get(8)?,
             })
         })
         .map_err(e)?;
@@ -277,6 +284,21 @@ pub fn set_teacher_score(db: State<'_, Db>, evaluation_id: i64, score: Option<f6
     conn.execute("UPDATE evaluations SET teacher_score = ?1 WHERE id = ?2", params![score, evaluation_id])
         .map_err(e)?;
     Ok(())
+}
+
+pub fn save_review(conn: &Connection, attempt_id: i64, review: Option<&str>) -> R<()> {
+    let n = conn
+        .execute("UPDATE attempts SET teacher_review = ?1 WHERE id = ?2", params![review, attempt_id])
+        .map_err(e)?;
+    if n == 0 {
+        return Err(format!("응시 기록을 찾을 수 없습니다 (#{attempt_id})"));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_teacher_review(db: State<'_, Db>, attempt_id: i64, review: Option<String>) -> R<()> {
+    save_review(&*lock(&db)?, attempt_id, review.as_deref())
 }
 
 #[tauri::command]
@@ -337,6 +359,14 @@ mod tests {
         assert!(attempts(&conn, Some(sid + 99), 10).unwrap().is_empty());
         assert!(attempt(&conn, 999).is_err());
         assert_eq!(attempts(&conn, None, 10).unwrap()[0].criterion_scores, None, "an empty object has no criteria");
+
+        // Teacher review: saved on the attempt, cleared with None, unknown attempt → error.
+        assert_eq!(attempt(&conn, aid).unwrap().teacher_review, None);
+        save_review(&conn, aid, Some(r#"{"annotations":[]}"#)).unwrap();
+        assert_eq!(attempt(&conn, aid).unwrap().teacher_review.as_deref(), Some(r#"{"annotations":[]}"#));
+        save_review(&conn, aid, None).unwrap();
+        assert_eq!(attempt(&conn, aid).unwrap().teacher_review, None);
+        assert!(save_review(&conn, 999, Some("{}")).is_err());
     }
 
     #[test]

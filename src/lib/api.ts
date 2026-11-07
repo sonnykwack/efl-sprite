@@ -62,6 +62,8 @@ export const api = {
     invoke<void>("set_sample_answer", { evaluationId, text }),
   setTeacherScore: (evaluationId: number, score: number | null) =>
     invoke<void>("set_teacher_score", { evaluationId, score }),
+  setTeacherReview: (attemptId: number, review: string | null) =>
+    invoke<void>("set_teacher_review", { attemptId, review }),
   getAttempt: (id: number) => invoke<AttemptDetail>("get_attempt", { id }),
   listAttempts: (studentId?: number | null, limit?: number) =>
     invoke<AttemptSummary[]>("list_attempts", { studentId: studentId ?? null, limit: limit ?? null }),

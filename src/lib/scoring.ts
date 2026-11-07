@@ -98,7 +98,7 @@ export interface LanguageError {
   /** Whether `quote` is a real span of the response (exact or snapped). */
   located: boolean;
   /** Who found it: the LLM, a deterministic rule (rules.ts) or the grammar model (GECToR). */
-  source: "llm" | "rule" | "gec";
+  source: "llm" | "rule" | "gec" | "teacher";
   /** Character span in the response (−1 if not located) — used to dedupe and order items. */
   start: number;
   end: number;

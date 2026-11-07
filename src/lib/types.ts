@@ -120,6 +120,8 @@ export interface AttemptDetail {
   audioPath: string | null;
   durationSeconds: number | null;
   createdAt: string;
+  /** Teacher review JSON (src/lib/review.ts), if the teacher corrected this response. */
+  teacherReview: string | null;
   evaluation: EvaluationRow | null;
 }
 
@@ -133,6 +135,7 @@ export interface AttemptSummary {
   teacherScore: number | null;
   /** Criterion scores of the latest evaluation (rubric order). */
   criterionScores: number[] | null;
+  teacherReview: string | null;
 }
 
 /** One correction from the grammar model, in UTF-16 offsets of the response text. */
