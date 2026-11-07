@@ -50,14 +50,18 @@ function useMic() {
   const [error, setError] = useState<string | null>(null);
   /** false after unmount: a running sequence must stop instead of reopening the mic. */
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set on EVERY mount: React StrictMode (dev) mounts → unmounts → mounts again, and a flag
+    // only cleared in the cleanup stayed false forever (seen 2026-11-07: "시작" opened the mic,
+    // then the sequence stopped at once).
+    alive.current = true;
+    return () => {
       alive.current = false;
       stopSpeaking();
       mic.current?.close();
-    },
-    [],
-  );
+      mic.current = null;
+    };
+  }, []);
   const [opening, setOpening] = useState(false);
   // Must be called directly from the click handler (see MicRecorder.open).
   const open = async () => {
