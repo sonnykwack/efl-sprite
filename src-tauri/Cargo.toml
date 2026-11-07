@@ -19,7 +19,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 # preserve_order: JSON schemas keep their key order on the way to llama-server, so the
-# grammar makes the model write `evidence` BEFORE `score` (see CLAUDE.md, scoring design).
+# grammar makes the model write `evidence` BEFORE `score` (see docs/development.md, scoring design).
 serde_json = { version = "1", features = ["preserve_order"] }
 # `bundled` compiles SQLite into the binary: identical behaviour on macOS and Windows,
 # no system DLL needed inside the MSIX package.

@@ -1,6 +1,6 @@
 // LLM scoring pipeline for interview / email / academic_discussion.
 //
-// Design (see CLAUDE.md → Scoring design):
+// Design (see docs/development.md → Scoring design):
 //  1. The rubric goes into the prompt with level anchors.
 //  2. Output is constrained by a JSON schema (llama-server grammar). For every criterion
 //     the model must write `evidence` (verbatim quotes) → `comment` → `score`, in that

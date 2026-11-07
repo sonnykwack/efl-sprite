@@ -5,8 +5,10 @@ design prompts or rules (unlike AD-1). The teacher scores every answer BLIND (be
 the app's result), then enters the band on the result page; History shows MAE / within-0.5 /
 bias.
 
-The full task texts and answers are in the chat log of 2026-11-04 and are entered in the app.
-Intended levels (author's design target, NOT ground truth — the teacher's band is):
+The tasks and answers were drafted with the AI coding tool at deliberately different levels
+(the author specified the levels and error types to cover), entered in the app, and then
+scored BLIND by the author, a working TOEFL instructor. Intended levels (design target,
+NOT ground truth — the teacher's band is):
 
 | Task | Answer | Intended | Designed features |
 |---|---|---|---|

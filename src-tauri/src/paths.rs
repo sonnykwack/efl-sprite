@@ -1,6 +1,6 @@
 //! Every filesystem location the app uses is resolved here — nowhere else.
 //!
-//! Cross-platform rules (see CLAUDE.md):
+//! Cross-platform rules (see docs/development.md):
 //! - Only `PathBuf::join`, never string concatenation with '/' or '\\'.
 //! - User data goes under Tauri's `app_data_dir()`:
 //!     macOS   ~/Library/Application Support/com.xogns.eflsprite

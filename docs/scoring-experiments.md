@@ -1,5 +1,9 @@
 # Scoring experiments log
 
+> "Teacher" in this log is the author (곽태훈), a working TOEFL instructor: reference scores, blind
+> scores and the problems reported after each run come from him. Prompt/code changes were implemented
+> with the AI coding tool and measured in the app (see README → 개발 과정과 역할 분담).
+
 Measurements from Settings → 채점 실험실. Each row = 3 single-sample runs of the same
 response; "final" = per-criterion median of the 3 runs (what the app shows).
 Criteria: Contribution / Support / Language, 0–5 each. Band = linear map to 1.0–6.0.

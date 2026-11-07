@@ -1,6 +1,6 @@
 //! Recorded answers (16 kHz mono WAV, encoded in the UI by src/lib/recorder.ts).
 //!
-//! Files live in `<data_dir>/audio/` with ASCII names only (CLAUDE.md rule 4: Whisper gets
+//! Files live in `<data_dir>/audio/` with ASCII names only (docs/development.md rule 4: Whisper gets
 //! a copy under `tmp/` anyway, but keeping our own names ASCII avoids surprises on Windows).
 //! Reading back is restricted to that folder.
 
