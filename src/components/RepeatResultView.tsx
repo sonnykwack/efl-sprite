@@ -43,6 +43,9 @@ export default function RepeatResultView({ ev }: { ev: RepeatEvaluation }) {
             <span className="font-semibold">{Math.round(ev.accuracy * 100)}%</span>
           </div>
           <div>음성 인식 {ev.whisperModel} · {(ev.latencyMs / 1000).toFixed(0)}초</div>
+          {ev.total === 0 && (
+            <div className="text-amber-700">인식된 말이 없어요. 밴드는 1.0이 가장 낮은 값이라 0점이어도 1.0으로 표시돼요.</div>
+          )}
           <div className="text-ink-400">AI 추정치이며 ETS 공식 점수가 아니에요. 발음 자체는 평가하지 않아요.</div>
         </div>
       </div>
