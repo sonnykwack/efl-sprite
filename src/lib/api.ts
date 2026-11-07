@@ -51,6 +51,8 @@ export const api = {
   // Tasks (문제)
   listTasks: () => invoke<Task[]>("list_tasks"),
   createTask: (task: NewTask) => invoke<number>("create_task", { task }),
+  updateTask: (id: number, task: NewTask) => invoke<void>("update_task", { id, task }),
+  countTaskAttempts: (id: number) => invoke<number>("count_task_attempts", { id }),
   deleteTask: (id: number) => invoke<void>("delete_task", { id }),
 
   // Students · attempts · evaluations

@@ -72,6 +72,8 @@ pub fn run() {
             engine::gec::gec_check,
             db::list_tasks,
             db::create_task,
+            db::update_task,
+            db::count_task_attempts,
             db::delete_task,
             records::list_students,
             records::create_student,

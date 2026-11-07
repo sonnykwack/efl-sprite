@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import TaskShare from "../components/TaskShare";
+import TaskEditor from "../components/TaskEditor";
 import { api, inTauri } from "../lib/api";
 import { targetSentences } from "../lib/accuracy";
 import { TASK_SPECS, TASK_TYPES_BY_SECTION } from "../lib/rubrics";
@@ -26,6 +27,8 @@ export default function TasksPage() {
   const [draft, setDraft] = useState<NewTask>(emptyDraft("interview"));
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number> | null>(null);
+  const [editing, setEditing] = useState<Task | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const spec = TASK_SPECS[draft.taskType];
 
   const refresh = () => {
@@ -57,10 +60,31 @@ export default function TasksPage() {
     }
   };
 
+  // Deleting a task also deletes its attempts and scores (ON DELETE CASCADE) — always confirm,
+  // and say how many records go with it.
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; attempts: number } | null>(null);
+  const askRemove = async (id: number) => {
+    const attempts = await api.countTaskAttempts(id).catch(() => 0);
+    setPendingDelete({ id, attempts });
+  };
   const remove = async (id: number) => {
+    setPendingDelete(null);
     await api.deleteTask(id).catch((e) => setError(String(e)));
     refresh();
   };
+
+  if (editing) {
+    return (
+      <TaskEditor
+        task={editing}
+        onDone={(saved) => {
+          setEditing(null);
+          setNotice(saved ? `"${editing.title}" 문제를 수정했어요.` : null);
+          refresh();
+        }}
+      />
+    );
+  }
 
   const base = "rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-sprite-500";
   const field = `w-full ${base}`;
@@ -156,6 +180,7 @@ export default function TasksPage() {
         {error && <p className="text-sm text-red-600">{error}</p>}
       </section>
 
+      {notice && <p className="mb-3 rounded-lg bg-sprite-50 px-3 py-2 text-sm text-sprite-700">{notice}</p>}
       <ul className="grid gap-2">
         {tasks.length === 0 && (
           <li className="text-sm text-ink-400">
@@ -194,9 +219,23 @@ export default function TasksPage() {
                   {t.taskType === "listen_repeat" ? targetSentences(t.material).join(" / ") : t.prompt}
                 </div>
               </div>
-              <button onClick={() => remove(t.id)} className="shrink-0 text-xs text-ink-400 hover:text-red-600">
-                삭제
-              </button>
+              <div className="flex shrink-0 gap-3 text-xs">
+                <button onClick={() => (setNotice(null), setEditing(t))} className="font-semibold text-sprite-700 hover:text-sprite-600">
+                  수정
+                </button>
+                <button onClick={() => askRemove(t.id)} className="text-ink-400 hover:text-red-600">
+                  삭제
+                </button>
+              </div>
+              {pendingDelete?.id === t.id && (
+                <div className="flex shrink-0 items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">
+                  {pendingDelete.attempts > 0 ? `응시 기록 ${pendingDelete.attempts}개와 채점 결과도 함께 삭제돼요.` : "이 문제를 삭제할까요?"}
+                  <button className="font-semibold" onClick={() => remove(t.id)}>
+                    삭제
+                  </button>
+                  <button onClick={() => setPendingDelete(null)}>취소</button>
+                </div>
+              )}
             </li>
           );
         })}

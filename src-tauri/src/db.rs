@@ -201,6 +201,46 @@ pub fn create_task(db: State<'_, Db>, task: NewTask) -> Result<i64, String> {
     Ok(conn.last_insert_rowid())
 }
 
+/// Update a task's content. The type (and section) never changes: attempts already scored
+/// against it would no longer match their rubric.
+pub fn update_task_row(conn: &Connection, id: i64, task: &NewTask) -> Result<(), String> {
+    if task.title.trim().is_empty() || task.prompt.trim().is_empty() {
+        return Err("제목과 문제 내용은 비워 둘 수 없습니다.".into());
+    }
+    let n = conn
+        .execute(
+            "UPDATE tasks SET title = ?1, prompt = ?2, material = ?3, prep_seconds = ?4, response_seconds = ?5 \
+             WHERE id = ?6",
+            params![
+                task.title.trim(),
+                task.prompt.trim(),
+                task.material.as_deref().map(str::trim).filter(|m| !m.is_empty()),
+                task.prep_seconds.clamp(0, 600),
+                task.response_seconds.clamp(5, 3600),
+                id
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err(format!("문제를 찾을 수 없습니다 (#{id})"));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_task(db: State<'_, Db>, id: i64, task: NewTask) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    update_task_row(&conn, id, &task)
+}
+
+/// How many attempts use this task (shown as a warning on the edit page).
+#[tauri::command]
+pub fn count_task_attempts(db: State<'_, Db>, id: i64) -> Result<i64, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    conn.query_row("SELECT count(*) FROM attempts WHERE task_id = ?1", params![id], |r| r.get(0))
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn delete_task(db: State<'_, Db>, id: i64) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
@@ -212,6 +252,37 @@ pub fn delete_task(db: State<'_, Db>, id: i64) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_task_keeps_type_and_validates() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate_for_test(&mut conn);
+        conn.execute(
+            "INSERT INTO tasks (id, section, task_type, title, prompt, response_seconds) VALUES (1, 'writing', 'email', 'Old', 'Q', 420)",
+            [],
+        )
+        .unwrap();
+        let mut t = NewTask {
+            section: "speaking".into(),
+            task_type: "interview".into(), // ignored: the type never changes
+            title: "  New title ".into(),
+            prompt: "New prompt".into(),
+            material: Some("   ".into()),
+            prep_seconds: -5,
+            response_seconds: 99999,
+        };
+        update_task_row(&conn, 1, &t).unwrap();
+        let row: (String, String, Option<String>, i64, i64, String) = conn
+            .query_row("SELECT title, task_type, material, prep_seconds, response_seconds, prompt FROM tasks WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+            })
+            .unwrap();
+        assert_eq!(row, ("New title".into(), "email".into(), None, 0, 3600, "New prompt".into()));
+        t.title = " ".into();
+        assert!(update_task_row(&conn, 1, &t).is_err());
+        t.title = "x".into();
+        assert!(update_task_row(&conn, 99, &t).is_err());
+    }
 
     /// A v1 database with data must upgrade to v2 without losing rows or breaking FKs.
     #[test]
