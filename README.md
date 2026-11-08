@@ -233,6 +233,7 @@ flowchart LR
 | 빌드 | Tauri 릴리스 빌드 → [`scripts/make-msix.ps1`](scripts/make-msix.ps1)이 실행 파일·엔진·스토어 아이콘과 매니페스트([`src-tauri/msix/`](src-tauri/msix/))로 `makeappx` 패키징 |
 | 자동화 | Windows CI가 푸시마다 **스토어 업로드용 MSIX** + **테스트 서명 MSIX와 인증서**를 아티팩트로 생성 |
 | 크기 | 약 57 MB (AI 모델은 첫 실행 때 앱 안에서 다운로드) |
+| 등록 정보 | [스토어 소개 문구·심사 메모](docs/store-listing.md) · [개인정보처리방침](docs/privacy-policy.md) |
 
 **테스트 설치** (Windows): Actions 아티팩트 `efl-sprite-msix`를 받은 뒤
 
