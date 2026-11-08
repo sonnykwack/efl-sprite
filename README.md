@@ -20,6 +20,15 @@
 >
 > TOEFL-style practice app. ETS 및 TOEFL과 관련이 없으며, 앱의 점수는 AI 추정치로 공식 점수가 아닙니다.
 
+## 📦 제출물
+| 항목 | 위치 |
+|---|---|
+| 프로젝트 결과보고서 (PDF) | [`docs/report/EFL-Sprite_결과보고서.pdf`](docs/report/EFL-Sprite_결과보고서.pdf) |
+| 시연 영상 | 🎬 *(유튜브 링크 — 업로드 후 추가)* |
+| 실행 파일 | [Releases](https://github.com/sonnykwack/efl-sprite/releases) — Windows 설치 파일 · macOS 앱 · 스토어 패키지(MSIX) |
+| 소스 코드 | 이 저장소 (`src/` UI, `src-tauri/` Rust 백엔드) |
+| 개발 문서 | [개발 가이드](docs/development.md) · [개발 과정 기록](docs/development-process.md) · [채점 실험 기록](docs/scoring-experiments.md) · [시연 대본](docs/demo-script.md) |
+
 ---
 
 ## 목차
