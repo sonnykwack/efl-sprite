@@ -23,7 +23,7 @@
 ## 📦 제출물
 | 항목 | 위치 |
 |---|---|
-| 프로젝트 결과보고서 (PDF) | [`docs/report/EFL-Sprite_결과보고서.pdf`](docs/report/EFL-Sprite_결과보고서.pdf) |
+| 프로젝트 결과보고서 (PDF) | [`EFL-Sprite_결과보고서.pdf`](EFL-Sprite_결과보고서.pdf) (저장소 최상위) |
 | 시연 영상 | 🎬 *(유튜브 링크 — 업로드 후 추가)* |
 | 실행 파일 | [Releases](https://github.com/sonnykwack/efl-sprite/releases) — Windows 설치 파일 · macOS 앱 · 스토어 패키지(MSIX) |
 | 소스 코드 | 이 저장소 (`src/` UI, `src-tauri/` Rust 백엔드) |
@@ -347,8 +347,10 @@ src-tauri/
   catalog/          다운로드 가능한 모델 목록
   msix/             스토어 매니페스트 · 패키지 ID
 scripts/            엔진 다운로드(fetch-engines.mjs) · MSIX 패키징(make-msix.ps1)
-docs/               개발 가이드 · 개발 과정 기록 · 채점 실험 기록 · 평가용 답안 세트
+docs/               개발 가이드 · 개발 과정 기록 · 채점 실험 기록 · 평가 답안 세트
+                    개인정보처리방침 · 스토어 등록 정보 · 시연 대본 · 보고서 원본(report-source/)
 samples/            예시 문제 파일 (.eflsprite)
+EFL-Sprite_결과보고서.pdf   프로젝트 결과보고서
 ```
 
 개발 규칙(크로스플랫폼 주의사항 10가지 포함)과 채점 설계 메모는 [`docs/development.md`](docs/development.md)에 있습니다.
