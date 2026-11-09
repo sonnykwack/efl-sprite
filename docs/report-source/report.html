@@ -62,7 +62,7 @@
     <tr><td>성명</td><td>곽태훈 (Taehoon Kwack)</td></tr>
     <tr><td>개발 기간</td><td>2026. 11. 2. – 2026. 11. 17.</td></tr>
     <tr><td>저장소</td><td>github.com/sonnykwack/efl-sprite</td></tr>
-    <tr><td>배포</td><td>Microsoft Store (MSIX, Store ID 9MZT0SB40M2W)</td></tr>
+    <tr><td>배포</td><td>Microsoft Store (MSIX, Store ID 9MZT0SB40M2W, 2026. 11. 9. 게시)</td></tr>
   </table>
 </section>
 
@@ -70,7 +70,7 @@
 <h1 class="page">요약</h1>
 <p>영어 말하기·쓰기 연습은 강사의 첨삭 시간에 묶여 있다. 학생은 답안을 낸 뒤 피드백을 며칠씩 기다리고, 2026년 개편된 TOEFL iBT의 새 유형(Listen and Repeat, Take an Interview, Write an Email, Academic Discussion)을 연습하고 채점받을 도구는 거의 없다. 기존 AI 첨삭 서비스는 학생의 글과 목소리를 외부 서버로 보내야 하고, 점수의 근거를 설명하지 못하는 경우가 많다.</p>
 <p>본 프로젝트는 <b>모든 AI 추론을 사용자의 PC 안에서 수행</b>하는 데스크톱 앱 EFL Sprite를 개발해 Microsoft Store에 배포했다. 음성 인식(Whisper), 채점용 대형 언어 모델(로컬 LLM), 학습자 문법 교정 모델(GECToR)을 하나의 파이프라인으로 묶고, <b>문법은 문법 모델과 규칙이, 내용과 논리는 LLM이 판단</b>하도록 역할을 나눴다. 출력 형식은 JSON 스키마로 강제해 모델이 학생 문장을 먼저 인용한 뒤 점수를 내게 했고, 인용 위치 보정·재검증·상한 규칙·측정 언어 지표로 결과를 보정했다. 강사는 AI 첨삭을 검토하고 직접 첨삭할 수 있으며, 문제는 AI로 생성하거나 파일로 공유할 수 있다.</p>
-<p>현직 TOEFL 강사(저자)의 블라인드 채점 8건과 비교한 결과 평균 절대 오차 0.44밴드, ±0.5밴드 이내 일치 75%를 보였고, 같은 답안을 반복 채점할 때의 항목 점수 표준편차는 0.94에서 0.00으로 줄었다. 앱은 macOS와 Windows에서 매 변경마다 자동 빌드되며, MSIX 패키지로 Microsoft Store에 제출했다.</p>
+<p>현직 TOEFL 강사(저자)의 블라인드 채점 8건과 비교한 결과 평균 절대 오차 0.44밴드, ±0.5밴드 이내 일치 75%를 보였고, 같은 답안을 반복 채점할 때의 항목 점수 표준편차는 0.94에서 0.00으로 줄었다. 앱은 macOS와 Windows에서 매 변경마다 자동 빌드되며, MSIX 패키지로 Microsoft Store 심사를 통과해 게시되었다.</p>
 
 <div class="stats">
   <div class="stat"><b>0.44</b><span>교사–AI 평균 절대 오차(밴드)</span></div>
@@ -357,12 +357,14 @@
 <h2>7.1 Microsoft Store 배포</h2>
 <table>
   <tr><th style="width:24%">항목</th><th>내용</th></tr>
+  <tr><td>스토어 주소</td><td>https://apps.microsoft.com/detail/9MZT0SB40M2W (무료, 교육 카테고리, IARC 3+)</td></tr>
   <tr><td>패키지 형식</td><td>MSIX. EXE/MSI 설치 파일 제출은 유료 코드 서명 인증서가 필요하지만, MSIX는 심사 후 Microsoft가 서명한다.</td></tr>
   <tr><td>패키지 ID</td><td><code>TaehoonKwack.EFLSprite</code> (Partner Center 발급), Store ID 9MZT0SB40M2W</td></tr>
   <tr><td>권한</td><td><code>runFullTrust</code>(포함된 추론 엔진 실행), <code>microphone</code>(스피킹)</td></tr>
   <tr><td>패키징</td><td>릴리스 빌드 → 스크립트가 실행 파일·엔진·스토어 아이콘·매니페스트를 배치 → <code>makeappx</code>로 패키지, 테스트용 자체 서명본과 인증서 동시 생성</td></tr>
   <tr><td>크기</td><td>약 57 MB (AI 모델은 첫 실행 때 앱 안에서 내려받음)</td></tr>
   <tr><td>정책 대응</td><td>개인정보처리방침 공개, 심사관용 테스트 절차·권한 사유 작성, 제품명에 상표 미사용 및 상표 고지</td></tr>
+  <tr><td>심사 경과</td><td>11/8 제출 → 1차 반려(정책 10.1.1.3 부정확한 표현: 스크린샷에 macOS 창 테두리가 보임. 패키지·권한은 통과) → 운영체제와 무관한 앱 화면만 남기도록 스크린샷 수정 후 재제출 → 11/9 게시</td></tr>
 </table>
 <h2>7.2 지속적 통합</h2>
 <ul>
