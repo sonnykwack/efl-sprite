@@ -181,15 +181,16 @@ English writing, English speaking, essay feedback, AI scoring, TOEFL practice, E
 ## 7. 스크린샷 (최소 1장, 권장 4–6장)
 - 크기: **1366×768 이상** (16:9 권장, PNG).
 - **macOS 창 테두리(신호등 버튼·제목 표시줄·둥근 모서리)가 보이면 반려**됩니다(정책 10.1.1.3, 1차 심사에서 실제로 반려됨). Mac 캡처는 창 테두리를 잘라내거나 Windows에서 캡처하세요.
-- 권장 구성과 캡션:
-  1. 채점 결과 + 교정 카드 열린 상태 — "점수마다 근거, 클릭하면 이유까지"
-  2. 언어 지표 — "어휘·문장 구조·정확성을 측정해 보여줘요"
-  3. 교사 첨삭 — "선생님이 직접 첨삭하고 AI 교정을 검토"
-  4. 응시 화면(라이팅 타이머) — "시험 형식 그대로 연습"
-  5. 따라 말하기 결과 — "단어별 정확도와 내 녹음 다시 듣기"
-  6. 시작하기 — "모델 다운로드부터 첫 응시까지 4단계"
+- 현재 등록한 구성(v0.1.1, 2560×1607 PNG, 첫 장이 썸네일)과 캡션(한국어 / English):
+  1. 채점 결과 + 교정 카드 — 점수마다 근거, 틀린 곳은 클릭하면 이유까지 / Every score has evidence — click a mistake to see why
+  2. 라이팅 응시(타이머·단어 수) — 실제 시험처럼, 타이머와 단어 수를 보며 작성 / Write like the real test, with a timer and word count
+  3. 스피킹 응시(따라 말하기 녹음) — 듣고 따라 말하기, 녹음까지 한 번에 / Listen, repeat, and record in one place
+  4. 따라 말하기 결과 — 단어별 정확도와 내 녹음 다시 듣기 / Word-by-word accuracy with your own recording
+  5. 교사 첨삭 — 선생님이 직접 첨삭하고 AI 교정을 검토 / Teachers add their own corrections and review the AI
+  6. 시작하기 — 모델 받기부터 첫 응시까지 4단계 / Four steps to your first practice
+- 올리기 전 확인: 파일 경로의 사용자 이름(`/Users/…`), 학생 실명 등 개인 정보가 화면에 없는지.
 
 ## 8. 패키지
-- CI 아티팩트 `efl-sprite-msix`의 **`EFL-Sprite_0.1.0_x64.msix`** (서명 없는 파일)을 업로드합니다.
+- 버전 태그(`v0.1.1` 등)를 올리면 실행되는 CI의 아티팩트 `efl-sprite-msix`에서 **`EFL-Sprite_<버전>_x64.msix`** (서명 없는 파일)을 업로드합니다. 브라우저가 "위험할 수 있는 파일"로 막으면 다운로드 목록에서 "유지"를 누릅니다.
   `_test.msix`와 `.cer`는 로컬 설치 테스트용이니 올리지 않습니다.
-- 다시 제출할 때는 버전을 올려야 합니다 (`src-tauri/tauri.conf.json`의 `version`, 예: 0.1.1).
+- 다시 제출할 때는 버전을 올려야 합니다 (`tauri.conf.json`, `package.json`, `Cargo.toml`의 `version`, 예: 0.1.1 → 0.1.2). 업데이트 제출 때는 "이 버전의 새로운 기능"도 함께 작성합니다.

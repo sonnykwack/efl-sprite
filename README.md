@@ -25,7 +25,7 @@
 |---|---|
 | 프로젝트 결과보고서 (PDF) | [`EFL-Sprite_결과보고서.pdf`](EFL-Sprite_결과보고서.pdf) (저장소 최상위) |
 | 시연 영상 | 🎬 *(유튜브 링크 — 업로드 후 추가)* |
-| Microsoft Store | [EFL Sprite](https://apps.microsoft.com/detail/9MZT0SB40M2W) (2026-11-09 게시) |
+| Microsoft Store | [EFL Sprite](https://apps.microsoft.com/detail/9MZT0SB40M2W) (2026-11-09 v0.1.0 게시, 11-12 v0.1.1 업데이트 제출) |
 | 실행 파일 | [Releases](https://github.com/sonnykwack/efl-sprite/releases) — Windows 설치 파일 · macOS 앱 · 스토어 패키지(MSIX) |
 | 소스 코드 | 이 저장소 (`src/` UI, `src-tauri/` Rust 백엔드) |
 | 개발 문서 | [개발 가이드](docs/development.md) · [개발 과정 기록](docs/development-process.md) · [채점 실험 기록](docs/scoring-experiments.md) · [시연 대본](docs/demo-script.md) |
@@ -166,7 +166,7 @@ AI 채점의 품질은 "무엇이 맞는 채점인가"를 아는 사람이 결�
 
 ## 6. 기술적으로 공들인 부분
 
-### 5.1 하이브리드 채점 파이프라인
+### 6.1 하이브리드 채점 파이프라인
 
 ```mermaid
 flowchart LR
@@ -196,7 +196,7 @@ flowchart LR
 - **보정** — 학습에 쓰지 않은 주제의 보정 앵커(약·중·강 예시), 분량·어조·오류 밀도 상한, 교사 점수로 맞춘 구간별 밴드 환산표.
 - **자연스러운 한국어 피드백** — 소형 LLM이 한자로 새거나 문장을 망가뜨리던 문제를 *문자 집합 문법(한글+ASCII만 생성 가능) + 문장 단위 번역 + 용어집 + 결과 검증 + 실패 시 영어 원문*으로 해결했습니다.
 
-### 5.2 Mac에서 개발, Windows로 배포 — 크로스플랫폼 엔지니어링
+### 6.2 Mac에서 개발, Windows로 배포 — 크로스플랫폼 엔지니어링
 - **모든 푸시마다 macOS·Windows 동시 빌드** (GitHub Actions). 한쪽 OS를 깨뜨리는 변경은 그날 발견됩니다.
 - **한글 사용자 폴더 대응** — `C:\Users\홍길동` 같은 경로를 C++ 엔진이 ANSI 코드 페이지로 열다 실패하는 문제를 피하려고, 엔진 인자는 항상 *데이터 폴더 기준 상대 경로 + ASCII 파일명*으로 넘깁니다.
 - **엔진 프로세스 관리** — llama-server·whisper-cli를 자식 프로세스로 실행하고(Windows는 `CREATE_NO_WINDOW`로 콘솔 창 깜빡임 방지), 앱 종료 시 정리합니다. 모델별로 병렬 슬롯·컨텍스트를 조정해 메모리에 맞춥니다.
@@ -204,12 +204,12 @@ flowchart LR
 - **UTF-16 오프셋** — Rust(바이트)와 JavaScript(UTF-16) 문자열 위치 차이를 변환해, 한글이나 둥근 따옴표가 섞여도 밑줄 위치가 정확합니다.
 - **안전한 파일 처리** — 다운로드는 `.part`로 받은 뒤 이름을 바꾸고, Windows의 "열린 파일은 바꿀 수 없음" 규칙을 지켜 덮어씁니다.
 
-### 5.3 GECToR를 Rust로 포팅
+### 6.3 GECToR를 Rust로 포팅
 - gotutiyan/gector의 추론 로직(`$START` 토큰, 첫 서브워드 라벨, `$KEEP` 편향, 반복 교정, 동사 형태 사전)을 Rust + ONNX Runtime으로 옮겼습니다.
 - 합성 모델로 통합 테스트를 만들어 *"pay a a a" 반복 삽입*, *한 단어를 두 번 고쳐 시제가 바뀌는 문제* 같은 버그를 실제 모델 없이 재현하고 고쳤습니다.
 - 실제 모델에서 의도적으로 넣은 오류 **7/7 검출**, 잘못된 교정 0건, 문장당 약 0.1초(CPU)였습니다.
 
-### 5.4 데이터와 신뢰성
+### 6.4 데이터와 신뢰성
 - SQLite + `PRAGMA user_version` 마이그레이션 (외래 키 무결성 확인 후 적용)
 - 답안은 **채점 전에 먼저 저장**해, 채점이 실패해도 학생의 글은 사라지지 않습니다.
 - 화면 오류는 Error Boundary로 격리하고, 모든 대기 작업에 시간 제한과 한국어 오류 안내를 둡니다.
@@ -250,6 +250,7 @@ flowchart LR
 | 자동화 | Windows CI가 푸시마다 **스토어 업로드용 MSIX** + **테스트 서명 MSIX와 인증서**를 아티팩트로 생성 |
 | 크기 | 약 57 MB (AI 모델은 첫 실행 때 앱 안에서 다운로드) |
 | 심사 경과 | 11/8 제출 → 스크린샷 반려(정책 10.1.1.3: macOS 창 테두리가 보임) → 창 테두리를 잘라낸 스크린샷으로 재제출 → 11/9 게시 |
+| 업데이트 | v0.1.1(11/12): 화면 참조 작성과 실기기 테스트 수정 사항 반영, 새 화면 스크린샷으로 업데이트 제출 |
 | 등록 정보 | [스토어 소개 문구·심사 메모](docs/store-listing.md) · [개인정보처리방침](docs/privacy-policy.md) |
 
 **테스트 설치** (Windows): Actions 아티팩트 `efl-sprite-msix`를 받은 뒤
