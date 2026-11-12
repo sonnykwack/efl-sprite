@@ -256,6 +256,10 @@ export function RepeatTask({
     }
     micRef.current = mic;
 
+    setPhase("listening");
+    await waitMs(800);
+    if (!aliveRef.current) return;
+
     const audioPaths: (string | null)[] = [];
     let totalSeconds = 0;
 
@@ -280,7 +284,7 @@ export function RepeatTask({
       setPhase("recording");
       let rec: Recording;
       try {
-        rec = await recordSentence(mic, task.responseSeconds, 1500);
+        rec = await recordSentence(mic, task.responseSeconds, 0);
       } catch (e: unknown) {
         if (!aliveRef.current) return;
         setError(micErrorKo(e));
@@ -412,7 +416,7 @@ export function RepeatTask({
               <LevelMeter level={level} suspended={suspended} />
               <div className="flex items-center justify-between">
                 <span className="text-xs text-ink-400">
-                  말이 끝나면 자동으로 넘어가거나 다음 버튼을 누르세요.
+                  다 말했으면 "다음"을 누르세요. 제한 시간이 끝나면 자동으로 넘어가요.
                 </span>
                 <button
                   type="button"
@@ -528,6 +532,9 @@ export function InterviewTask({
     micRef.current = mic;
 
     setPhase("listening");
+    await waitMs(800);
+    if (!aliveRef.current) return;
+
     try {
       await speak(task.prompt);
     } catch {
