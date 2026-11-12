@@ -1,63 +1,107 @@
-//! Every filesystem location the app uses is resolved here — nowhere else.
-//!
-//! Cross-platform rules (see docs/development.md):
-//! - Only `PathBuf::join`, never string concatenation with '/' or '\\'.
-//! - User data goes under Tauri's `app_data_dir()`:
-//!     macOS   ~/Library/Application Support/com.xogns.eflsprite
-//!     Windows %APPDATA%\com.xogns.eflsprite   (MSIX virtualises this per package)
-//! - Bundled engine binaries live under `<resource_dir>/engines/` (see tauri.<os>.conf.json).
+//! 앱이 쓰는 모든 폴더와 파일 위치를 계산하는 유일한 파일입니다.
+//! - data_dir: 앱 데이터 디렉토리 (폴더가 없으면 자동 생성)
+//! - models_dir: 모델 파일 저장소 (자동 생성)
+//! - audio_dir: 녹음 오디오 파일 저장소 (자동 생성)
+//! - db_path: SQLite DB 파일 경로 (생성하지 않음)
+//! - engines_dir: 번들된 외부 실행 파일/리소스 디렉토리 (생성하지 않음)
+//! - whisper_bin / llama_bin / sample_wav: 실행 파일 및 샘플 경로
 
+use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-pub fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+/// 폴더가 없으면 만들고 경로를 반환하는 도우미 함수 (한국어 오류 메시지 적용)
+fn ensure_dir(dir: PathBuf) -> Result<PathBuf, String> {
+    fs::create_dir_all(&dir).map_err(|e| {
+        format!("폴더를 만들 수 없어요: {}: {}", dir.display(), e)
+    })?;
     Ok(dir)
+}
+
+pub fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("앱 데이터 폴더를 찾을 수 없어요: {}", e))?;
+    ensure_dir(path)
 }
 
 pub fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = data_dir(app)?.join("models");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    Ok(dir)
+    let base = data_dir(app)?;
+    ensure_dir(base.join("models"))
 }
 
-/// Recorded answers (16 kHz WAV).
 pub fn audio_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = data_dir(app)?.join("audio");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    Ok(dir)
+    let base = data_dir(app)?;
+    ensure_dir(base.join("audio"))
 }
 
 pub fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(data_dir(app)?.join("efl-sprite.sqlite3"))
+    let base = data_dir(app)?;
+    Ok(base.join("efl-sprite.sqlite3"))
 }
 
 pub fn engines_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
+    let path = app
         .path()
         .resource_dir()
-        .map_err(|e| e.to_string())?
-        .join("engines"))
+        .map_err(|e| format!("리소스 폴더를 찾을 수 없어요: {}", e))?;
+    Ok(path.join("engines"))
 }
 
-/// Adds `.exe` on Windows. Use for every executable name.
+pub fn whisper_bin(app: &AppHandle) -> Result<PathBuf, String> {
+    let base = engines_dir(app)?;
+    Ok(base.join("whisper").join(exe("whisper-cli")))
+}
+
+pub fn llama_bin(app: &AppHandle) -> Result<PathBuf, String> {
+    let base = engines_dir(app)?;
+    Ok(base.join("llama").join(exe("llama-server")))
+}
+
+pub fn sample_wav(app: &AppHandle) -> Result<PathBuf, String> {
+    let base = engines_dir(app)?;
+    Ok(base.join("samples").join("jfk.wav"))
+}
+
 pub fn exe(name: &str) -> String {
     if cfg!(windows) {
-        format!("{name}.exe")
+        format!("{}.exe", name)
     } else {
         name.to_string()
     }
 }
 
-pub fn whisper_bin(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(engines_dir(app)?.join("whisper").join(exe("whisper-cli")))
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub fn llama_bin(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(engines_dir(app)?.join("llama").join(exe("llama-server")))
-}
+    #[test]
+    fn test_exe_name() {
+        let res = exe("whisper-cli");
+        if cfg!(windows) {
+            assert!(res.ends_with(".exe"));
+        } else {
+            assert_eq!(res, "whisper-cli");
+        }
+    }
 
-pub fn sample_wav(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(engines_dir(app)?.join("samples").join("jfk.wav"))
+    #[test]
+    fn test_ensure_dir() {
+        // 프로세스 ID로 독립된 테스트 폴더 생성 (동시 실행 시 충돌 방지)
+        let temp_dir = std::env::temp_dir().join(format!("efl-paths-test-{}", std::process::id()));
+        let target = temp_dir.join("sub").join("folder");
+
+        // 1. 실제로 하위 폴더까지 잘 만들어지는지 확인
+        let res = ensure_dir(target.clone());
+        assert!(res.is_ok());
+        assert!(target.exists());
+
+        // 2. 이미 존재하는 폴더에 다시 호출해도 오류 없이 통과하는지 확인
+        let res2 = ensure_dir(target.clone());
+        assert!(res2.is_ok());
+
+        // 테스트 정리
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
 }
