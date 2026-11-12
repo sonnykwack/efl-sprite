@@ -104,7 +104,9 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
   Rust `audio.rs` saves to `<data_dir>/audio/` (ASCII names; `read_audio` limited to that
   folder). Prompts read by the OS voice (`speech.ts`, Web Speech API); text fallback.
   Listen & Repeat: `repeat.ts` (Whisper per sentence → word accuracy → 0–5 per sentence →
-  band; audio_path = JSON array). Interview: transcript + `speakingStats` → LLM pipeline.
+  band; audio_path = JSON array). No silence auto-stop (student presses "다음" or the time limit ends);
+  0.8 s wait after the mic opens before the first prompt (OS audio route switch clips it);
+  `accuracy.ts` spells out numbers 0–99 before comparing (Whisper writes "20"). Interview: transcript + `speakingStats` → LLM pipeline.
 - Measured language features (`features.ts`): length, MATTR + long-word share, clause
   variety, error density (GEC + rules), linking expressions → 0–5 indicators shown to the
   student and sent to the LLM as <measured_features>; Language moves 1 point toward the
