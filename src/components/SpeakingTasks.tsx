@@ -29,13 +29,11 @@ function LevelMeter({
   level: number;
   suspended: boolean;
 }) {
-  const pct = Math.min(100, Math.max(0, Math.round(level * 100)));
+  // level is RMS (speech ≈ 0.02–0.2); sqrt spreads it so speech fills the bar visibly.
+  const pct = Math.min(100, Math.round(Math.sqrt(Math.max(0, level)) * 260));
   return (
     <div className="grid gap-1.5">
-      <div className="flex items-center justify-between text-xs text-ink-400">
-        <span>마이크 입력 레벨</span>
-        <span>{pct}%</span>
-      </div>
+      <div className="text-xs text-ink-400">마이크 입력 레벨</div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-sprite-50">
         <div
           className="h-full rounded-full bg-sprite-500 transition-all duration-75"
@@ -174,6 +172,7 @@ export function RepeatTask({
   const [level, setLevel] = useState<number>(0);
   const [suspended, setSuspended] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState<boolean>(false);
 
   const aliveRef = useRef<boolean>(true);
   const micRef = useRef<MicRecorder | null>(null);
@@ -237,8 +236,9 @@ export function RepeatTask({
   };
 
   const handleStart = async () => {
-    if (sentences.length === 0) return;
+    if (sentences.length === 0 || opening) return;
     setError(null);
+    setOpening(true);
 
     let mic: MicRecorder;
     try {
@@ -246,6 +246,8 @@ export function RepeatTask({
     } catch (e: unknown) {
       if (aliveRef.current) setError(micErrorKo(e));
       return;
+    } finally {
+      if (aliveRef.current) setOpening(false);
     }
 
     if (!aliveRef.current) {
@@ -361,8 +363,8 @@ export function RepeatTask({
             {fmtClock(task.responseSeconds)})
           </p>
           <div>
-            <button type="button" className={btnPrimary} onClick={handleStart}>
-              시작
+            <button type="button" className={btnPrimary} disabled={opening} onClick={handleStart}>
+              {opening ? "마이크 준비 중…" : "시작"}
             </button>
           </div>
         </div>
@@ -444,6 +446,7 @@ export function InterviewTask({
   const [level, setLevel] = useState<number>(0);
   const [suspended, setSuspended] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState<boolean>(false);
 
   const aliveRef = useRef<boolean>(true);
   const micRef = useRef<MicRecorder | null>(null);
@@ -504,7 +507,9 @@ export function InterviewTask({
   };
 
   const handleStart = async () => {
+    if (opening) return;
     setError(null);
+    setOpening(true);
 
     let mic: MicRecorder;
     try {
@@ -512,6 +517,8 @@ export function InterviewTask({
     } catch (e: unknown) {
       if (aliveRef.current) setError(micErrorKo(e));
       return;
+    } finally {
+      if (aliveRef.current) setOpening(false);
     }
 
     if (!aliveRef.current) {
@@ -569,7 +576,8 @@ export function InterviewTask({
     setPhase("saving");
 
     try {
-      const savedPath = await api.saveAudio("interview", rec.wav);
+      // Nothing said → no file; AttemptPage then asks the student to check the mic.
+      const savedPath = rec.heard ? await api.saveAudio("interview", rec.wav) : null;
       if (!aliveRef.current) return;
       onDone({ audioPaths: [savedPath], seconds: rec.seconds });
     } catch (e: unknown) {
@@ -632,8 +640,8 @@ export function InterviewTask({
               ? `준비 시간 ${fmtClock(task.prepSeconds)} 후 ${fmtClock(task.responseSeconds)} 동안 답변을 녹음합니다.`
               : `${fmtClock(task.responseSeconds)} 동안 답변을 녹음합니다.`}
           </span>
-          <button type="button" className={btnPrimary} onClick={handleStart}>
-            시작
+          <button type="button" className={btnPrimary} disabled={opening} onClick={handleStart}>
+            {opening ? "마이크 준비 중…" : "시작"}
           </button>
         </div>
       )}
