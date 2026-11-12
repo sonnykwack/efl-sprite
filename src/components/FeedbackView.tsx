@@ -343,16 +343,16 @@ export default function FeedbackView({
 
               return (
                 <div key={i} className="rounded-lg bg-sprite-50 p-3 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${statusInfo.bg}`}>
+                  <div className="flex items-start gap-2">
+                    <span className={`shrink-0 whitespace-nowrap rounded px-2 py-0.5 text-[10px] font-bold ${statusInfo.bg}`}>
                       {statusInfo.label}
                     </span>
-                    <span className="text-sm font-medium text-ink-900">
+                    <div className="min-w-0 text-sm font-medium text-ink-900">
                       {pt.pointKo ? pt.pointKo : pt.point}
-                    </span>
-                    {pt.pointKo && (
-                      <span className="text-xs text-ink-400">({pt.point})</span>
-                    )}
+                      {pt.pointKo && (
+                        <span className="ml-1.5 text-xs font-normal text-ink-400">({pt.point})</span>
+                      )}
+                    </div>
                   </div>
                   {pt.evidence && (
                     <div className="text-xs text-ink-600 pl-2 border-l-2 border-sprite-300" data-selectable>
