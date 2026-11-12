@@ -25,7 +25,7 @@
 |---|---|
 | 프로젝트 결과보고서 (PDF) | [`EFL-Sprite_결과보고서.pdf`](EFL-Sprite_결과보고서.pdf) (저장소 최상위) |
 | 시연 영상 | 🎬 *(유튜브 링크 — 업로드 후 추가)* |
-| Microsoft Store | [EFL Sprite](https://apps.microsoft.com/detail/9MZT0SB40M2W) (2026-11-09 v0.1.0 게시, 11-12 v0.1.1 업데이트 제출) |
+| Microsoft Store | [EFL Sprite](https://apps.microsoft.com/detail/9MZT0SB40M2W) (2026-11-09 v0.1.0 게시, 11-12 v0.1.1 업데이트 게시) |
 | 실행 파일 | [Releases](https://github.com/sonnykwack/efl-sprite/releases) — Windows 설치 파일 · macOS 앱 · 스토어 패키지(MSIX) |
 | 소스 코드 | 이 저장소 (`src/` UI, `src-tauri/` Rust 백엔드) |
 | 개발 문서 | [개발 가이드](docs/development.md) · [개발 과정 기록](docs/development-process.md) · [채점 실험 기록](docs/scoring-experiments.md) · [시연 대본](docs/demo-script.md) |
@@ -250,7 +250,7 @@ flowchart LR
 | 자동화 | Windows CI가 푸시마다 **스토어 업로드용 MSIX** + **테스트 서명 MSIX와 인증서**를 아티팩트로 생성 |
 | 크기 | 약 57 MB (AI 모델은 첫 실행 때 앱 안에서 다운로드) |
 | 심사 경과 | 11/8 제출 → 스크린샷 반려(정책 10.1.1.3: macOS 창 테두리가 보임) → 창 테두리를 잘라낸 스크린샷으로 재제출 → 11/9 게시 |
-| 업데이트 | v0.1.1(11/12): 화면 참조 작성과 실기기 테스트 수정 사항 반영, 새 화면 스크린샷으로 업데이트 제출 |
+| 업데이트 | v0.1.1(11/12): 화면 참조 작성과 실기기 테스트 수정 사항 반영, 새 화면 스크린샷으로 업데이트 제출, 같은 날 인증 통과 후 게시 |
 | 등록 정보 | [스토어 소개 문구·심사 메모](docs/store-listing.md) · [개인정보처리방침](docs/privacy-policy.md) |
 
 **테스트 설치** (Windows): Actions 아티팩트 `efl-sprite-msix`를 받은 뒤
