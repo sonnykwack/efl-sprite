@@ -1,328 +1,545 @@
-// Student-facing feedback for one LLM evaluation. Used by the result page and the scoring lab.
-//
-// Corrections are explained on CLICK (not hover): the macOS WKWebView used by Tauri does not
-// show native `title` tooltips, and click also works on touch screens.
-import { GUIDE, categoryFromKind, wordDiff, type ErrorCategory } from "../lib/grammarGuide";
+import { GUIDE, categoryFromKind, wordDiff } from "../lib/grammarGuide";
 import type { LanguageError, LlmEvaluation } from "../lib/scoring";
-
-const KIND_COLOR = {
-  grammar: "bg-rose-100 decoration-rose-400",
-  sentence: "bg-amber-100 decoration-amber-500",
-  word_choice: "bg-sky-100 decoration-sky-400",
-  register: "bg-violet-100 decoration-violet-400",
-} as const;
-
-/** Evaluations saved before the taxonomy existed only carry `kind`. */
-const categoryOf = (e: LanguageError): ErrorCategory => e.category ?? categoryFromKind(e.kind);
 
 export interface Selection {
   selected: number | null;
   onSelect: (i: number | null) => void;
 }
 
-export function BandBadge({ band, label = "추정 밴드" }: { band: number; label?: string }) {
+function Diff({ before, after }: { before: string; after: string }) {
+  const diffs = wordDiff(before, after);
+  const totalPieces = diffs.length;
+  const changedPieces = diffs.filter((d) => d.op !== "same").length;
+  const isTooManyChanges = changedPieces > Math.max(2, totalPieces * 0.5);
+
+  if (isTooManyChanges) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-sm font-medium" data-selectable>
+        <span className="line-through text-red-600 bg-red-50 px-1 rounded">{before}</span>
+        <span className="text-ink-400">→</span>
+        <span className="font-bold text-sprite-700 bg-sprite-50 px-1 rounded">{after}</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center rounded-2xl bg-sprite-500 px-5 py-3 text-white">
-      <div className="text-[11px] opacity-80">{label}</div>
-      <div className="text-3xl font-bold leading-none">{band.toFixed(1)}</div>
-      <div className="text-[10px] opacity-70">/ 6.0</div>
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm font-medium" data-selectable>
+      {diffs.map((d, i) => {
+        let spanNode = null;
+        if (d.op === "same") {
+          spanNode = <span className="text-ink-900">{d.text}</span>;
+        } else if (d.op === "del") {
+          spanNode = (
+            <span className="line-through text-red-600 bg-red-50 px-1 rounded">
+              {d.text}
+            </span>
+          );
+        } else if (d.op === "ins") {
+          spanNode = (
+            <span className="font-bold text-sprite-700 bg-sprite-50 px-1 rounded">
+              {d.text}
+            </span>
+          );
+        }
+        return (
+          <span key={i}>
+            {spanNode}
+            {" "}
+          </span>
+        );
+      })}
     </div>
   );
 }
 
-function Diff({ before, after }: { before: string; after: string }) {
-  const style = {
-    same: "text-ink-600",
-    del: "rounded bg-rose-50 px-0.5 text-rose-600 line-through",
-    ins: "rounded bg-sprite-100 px-0.5 font-semibold text-sprite-700",
-  } as const;
-  const parts = wordDiff(before, after);
-  const changed = parts.filter((p) => p.op !== "same").length;
-  // Heavy rewrite (most words changed): an interleaved diff is unreadable — show before → after.
-  if (changed > Math.max(2, parts.length * 0.5)) {
-    return (
-      <span className="leading-6">
-        <span className={style.del}>{before}</span> <span className="text-ink-400">→</span>{" "}
-        <span className={style.ins}>{after}</span>
-      </span>
-    );
+function SourceBadge({ source }: { source?: string }) {
+  if (source === "rule") {
+    return <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800">규칙 검사</span>;
   }
+  if (source === "gec") {
+    return <span className="rounded bg-sprite-100 px-1.5 py-0.5 text-[11px] font-semibold text-sprite-700">문법 모델</span>;
+  }
+  if (source === "teacher") {
+    return <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-bold text-violet-700">선생님</span>;
+  }
+  return null;
+}
+
+function SourceBadgeShort({ source }: { source?: string }) {
+  if (source === "rule") {
+    return <span className="rounded bg-sky-100 px-1 py-0.5 text-[10px] font-semibold text-sky-800">규칙</span>;
+  }
+  if (source === "gec") {
+    return <span className="rounded bg-sprite-100 px-1 py-0.5 text-[10px] font-semibold text-sprite-700">문법 모델</span>;
+  }
+  if (source === "teacher") {
+    return <span className="rounded bg-violet-100 px-1 py-0.5 text-[10px] font-bold text-violet-700">선생님</span>;
+  }
+  return null;
+}
+
+export function BandBadge({ band, label = "추정 밴드" }: { band: number; label?: string }) {
   return (
-    <span className="leading-6">
-      {parts.map((p, i) => (
-        <span key={i}>
-          <span className={style[p.op]}>{p.text}</span>{" "}
-        </span>
-      ))}
-    </span>
+    <div className="flex flex-col items-center justify-center rounded-2xl bg-sprite-500 px-5 py-4 text-white shadow-sm">
+      <span className="text-xs font-medium text-sprite-100">{label}</span>
+      <span className="my-0.5 text-3xl font-extrabold tracking-tight">{band.toFixed(1)}</span>
+      <span className="text-xs text-sprite-100">/ 6.0</span>
+    </div>
   );
 }
 
-/** Explanation card for one correction. */
 export function CorrectionDetail({ e, onClose }: { e: LanguageError; onClose?: () => void }) {
-  const info = GUIDE[categoryOf(e)];
+  const cat = e.category ?? categoryFromKind(e.kind);
+  const guideInfo = GUIDE[cat];
+
   return (
-    <div className="rounded-xl border border-sprite-300 bg-white p-4 text-sm shadow-sm" data-selectable>
-      <div className="mb-2 flex items-center gap-2">
-        <span className="rounded bg-sprite-50 px-1.5 py-0.5 text-xs font-semibold text-sprite-700">{info.label}</span>
-        {e.source === "rule" && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-700">규칙 검사</span>}
-        {e.source === "gec" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-700">문법 모델</span>}
-        {e.source === "teacher" && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">선생님</span>}
+    <div className="rounded-xl border border-sprite-500 bg-white p-4 shadow-sm space-y-3" data-selectable>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {guideInfo?.label && (
+            <span className="rounded bg-sprite-100 px-2 py-0.5 text-xs font-bold text-sprite-700">
+              {guideInfo.label}
+            </span>
+          )}
+          <SourceBadge source={e.source} />
+        </div>
         {onClose && (
-          <button onClick={onClose} className="ml-auto text-xs text-ink-400 hover:text-ink-900">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-ink-400 hover:text-ink-900 font-semibold"
+          >
             닫기 ✕
           </button>
         )}
       </div>
-      <div className="mb-2">
-        <Diff before={e.quote} after={e.correction} />
-      </div>
-      {e.why && <p className="mb-2">{e.why}</p>}
-      <p className="text-xs leading-5 text-ink-600">
-        <span className="font-semibold">원칙 </span>
-        {info.principle}
-      </p>
-      {info.examples.length > 0 && (
-        <p className="mt-1 text-xs text-ink-400">예) {info.examples.join(" · ")}</p>
+
+      <Diff before={e.quote} after={e.correction} />
+
+      {e.why && <p className="text-xs text-ink-600">{e.why}</p>}
+
+      {guideInfo?.principle && (
+        <div className="text-xs text-ink-600 space-y-1">
+          <div><strong className="text-ink-900">원칙:</strong> {guideInfo.principle}</div>
+          {guideInfo.examples && guideInfo.examples.length > 0 && (
+            <div className="text-[11px] text-ink-400">
+              예) {guideInfo.examples.join(" · ")}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-/** The student's response with every located correction highlighted; click to explain. */
+export function CorrectionList({
+  errors,
+  selected,
+  onSelect,
+}: {
+  errors: LanguageError[];
+  selected?: number | null;
+  onSelect?: (i: number | null) => void;
+}) {
+  if (!errors || errors.length === 0) {
+    return <p className="text-xs text-ink-400">교정할 부분을 찾지 못했어요.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {errors.map((err, i) => {
+        const isOpen = selected === i;
+        const cat = err.category ?? categoryFromKind(err.kind);
+        const guideInfo = GUIDE[cat];
+        const isLocatedFalse = err.located === false;
+
+        return (
+          <div key={i} className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (onSelect) {
+                  onSelect(isOpen ? null : i);
+                }
+              }}
+              className={`w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl p-3 text-left transition border border-black/5 ${
+                isOpen ? "bg-sprite-50 border-sprite-300" : "bg-white hover:bg-sprite-50"
+              } ${isLocatedFalse ? "border-red-300 bg-red-50/50" : ""}`}
+              data-selectable
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                {guideInfo?.label && (
+                  <span className="rounded border border-black/10 bg-white px-2 py-0.5 text-xs font-semibold text-ink-900">
+                    {guideInfo.label}
+                  </span>
+                )}
+                <SourceBadgeShort source={err.source} />
+                <Diff before={err.quote} after={err.correction} />
+                {isLocatedFalse && (
+                  <span className="text-xs text-red-600 font-medium"> (답안에서 찾을 수 없음)</span>
+                )}
+              </div>
+            </button>
+
+            {!isOpen && err.why && (
+              <p className="text-xs text-ink-400 px-3" data-selectable>
+                {err.why}
+              </p>
+            )}
+
+            {isOpen && (
+              <div className="pl-2">
+                <CorrectionDetail e={err} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AnnotatedResponse({
   text,
   errors,
-  selected = null,
+  selected,
   onSelect,
-}: { text: string; errors: LanguageError[] } & Partial<Selection>) {
-  const spans = errors
-    .map((e, idx) => ({ e, idx }))
-    .filter(({ e }) => e.start >= 0 && e.end > e.start)
-    .sort((a, b) => a.e.start - b.e.start)
-    .filter((x, i, all) => i === 0 || x.e.start >= all[i - 1].e.end);
-  const parts: JSX.Element[] = [];
-  let pos = 0;
-  spans.forEach(({ e, idx }) => {
-    if (e.start > pos) parts.push(<span key={`t${idx}`}>{text.slice(pos, e.start)}</span>);
+}: {
+  text: string;
+  errors: LanguageError[];
+  selected?: number | null;
+  onSelect?: (i: number | null) => void;
+}) {
+  const validErrors = (errors || [])
+    .map((e, originalIndex) => ({ e, originalIndex }))
+    .filter(
+      ({ e }) =>
+        e.located !== false &&
+        e.start >= 0 &&
+        e.end > e.start &&
+        e.end <= text.length
+    );
+
+  validErrors.sort((a, b) => a.e.start - b.e.start);
+
+  const nonOverlapping: { e: LanguageError; originalIndex: number }[] = [];
+  let lastEnd = 0;
+  for (const item of validErrors) {
+    if (item.e.start >= lastEnd) {
+      nonOverlapping.push(item);
+      lastEnd = item.e.end;
+    }
+  }
+
+  let currentIndex = 0;
+  const parts: React.ReactNode[] = [];
+
+  nonOverlapping.forEach(({ e, originalIndex }, idx) => {
+    if (e.start > currentIndex) {
+      parts.push(
+        <span key={`txt-${idx}`}>{text.slice(currentIndex, e.start)}</span>
+      );
+    }
+
+    const isSelected = selected === originalIndex;
+    const kindColors: Record<string, string> = {
+      grammar: "bg-rose-100 text-rose-900 border-b-2 border-rose-400",
+      sentence: "bg-amber-100 text-amber-900 border-b-2 border-amber-400",
+      word_choice: "bg-sky-100 text-sky-900 border-b-2 border-sky-400",
+      register: "bg-violet-100 text-violet-900 border-b-2 border-violet-400",
+    };
+    const colorClass =
+      kindColors[e.kind] || "bg-gray-100 text-gray-900 border-b-2 border-gray-400";
+
     parts.push(
       <mark
-        key={`m${idx}`}
-        role="button"
-        onClick={() => onSelect?.(selected === idx ? null : idx)}
-        className={`cursor-pointer rounded px-0.5 text-inherit underline decoration-2 underline-offset-2 ${KIND_COLOR[e.kind]} ${
-          selected === idx ? "ring-2 ring-sprite-500" : "hover:ring-1 hover:ring-sprite-300"
+        key={`mark-${originalIndex}`}
+        onClick={() => {
+          if (onSelect) {
+            onSelect(selected === originalIndex ? null : originalIndex);
+          }
+        }}
+        className={`cursor-pointer px-1 rounded transition ${colorClass} ${
+          isSelected ? "ring-2 ring-sprite-500 font-semibold" : ""
         }`}
       >
         {text.slice(e.start, e.end)}
-      </mark>,
+      </mark>
     );
-    pos = e.end;
+    currentIndex = e.end;
   });
-  if (pos < text.length) parts.push(<span key="end">{text.slice(pos)}</span>);
-  const sel = selected != null ? errors[selected] : null;
+
+  if (currentIndex < text.length) {
+    parts.push(<span key="txt-end">{text.slice(currentIndex)}</span>);
+  }
+
+  const selectedError =
+    selected != null && errors && errors[selected] ? errors[selected] : null;
+
   return (
-    <div className="grid gap-3">
-      <p className="whitespace-pre-wrap text-sm leading-7" data-selectable>
-        {parts}
-      </p>
-      {sel ? (
-        <CorrectionDetail e={sel} onClose={() => onSelect?.(null)} />
+    <div className="space-y-4">
+      <div
+        className="whitespace-pre-wrap text-sm leading-relaxed text-ink-900"
+        data-selectable
+      >
+        {parts.length > 0 ? parts : text}
+      </div>
+
+      {selectedError ? (
+        <CorrectionDetail
+          e={selectedError}
+          onClose={() => {
+            if (onSelect) onSelect(null);
+          }}
+        />
       ) : (
-        spans.length > 0 && <p className="text-[11px] text-ink-400">밑줄 친 부분을 클릭하면 왜 틀렸는지와 고친 표현이 보여요.</p>
+        validErrors.length > 0 && (
+          <p className="text-xs text-ink-400">
+            밑줄 친 부분을 클릭하면 왜 틀렸는지와 고친 표현이 보여요.
+          </p>
+        )
       )}
     </div>
   );
 }
 
-export function CorrectionList({ errors, selected = null, onSelect }: { errors: LanguageError[] } & Partial<Selection>) {
-  if (errors.length === 0) return <p className="text-sm text-ink-400">교정할 부분을 찾지 못했어요.</p>;
-  return (
-    <ul className="grid gap-1" data-selectable>
-      {errors.map((e, i) => {
-        const info = GUIDE[categoryOf(e)];
-        const open = selected === i;
-        return (
-          <li key={i}>
-            <button
-              onClick={() => onSelect?.(open ? null : i)}
-              className={`w-full rounded-lg px-2 py-1.5 text-left text-sm ${open ? "bg-sprite-50" : "hover:bg-sprite-50/60"} ${
-                e.located ? "" : "text-red-600"
-              }`}
-            >
-              <span className="mr-1.5 rounded bg-white px-1.5 text-[10px] text-ink-600 ring-1 ring-black/5">{info.label}</span>
-              {e.source === "rule" && <span className="mr-1.5 rounded bg-sky-100 px-1.5 text-[10px] text-sky-700">규칙</span>}
-              {e.source === "gec" && <span className="mr-1.5 rounded bg-emerald-100 px-1.5 text-[10px] text-emerald-700">문법 모델</span>}
-              {e.source === "teacher" && <span className="mr-1.5 rounded bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-700">선생님</span>}
-              <Diff before={e.quote} after={e.correction} />
-              {!e.located && <span className="text-xs"> (답안에서 찾을 수 없음)</span>}
-              {e.why && !open && <span className="mt-0.5 block text-xs text-ink-400">{e.why}</span>}
-            </button>
-            {open && (
-              <div className="mt-1">
-                <CorrectionDetail e={e} />
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-const POINT_KO = { covered: "다룸", partial: "부족", missing: "빠짐" } as const;
-const POINT_COLOR = { covered: "text-sprite-700", partial: "text-amber-600", missing: "text-red-600" } as const;
-
 export default function FeedbackView({
-  evaluation: ev,
+  evaluation,
   showAnalysis = true,
-  selected = null,
+  selected,
   onSelect,
 }: {
   evaluation: LlmEvaluation;
   showAnalysis?: boolean;
-} & Partial<Selection>) {
-  const caps = ev.caps ?? [];
+  selected?: number | null;
+  onSelect?: (i: number | null) => void;
+}) {
   return (
-    <div className="grid gap-5">
-      {caps.length > 0 && (
-        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
-          <div className="mb-1 font-semibold">점수 상한 적용</div>
-          <ul className="ml-4 list-disc text-ink-600">
-            {caps.map((c, i) => (
-              <li key={i}>{c}</li>
+    <div className="space-y-6">
+      {/* 1. Score caps */}
+      {evaluation.caps && evaluation.caps.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm space-y-1">
+          <div className="font-bold">점수 상한 적용</div>
+          <ul className="list-inside list-disc space-y-0.5 text-xs text-amber-800">
+            {evaluation.caps.map((cap, i) => (
+              <li key={i}>{cap}</li>
             ))}
           </ul>
-        </section>
-      )}
-
-      {ev.points && ev.points.length > 0 && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
-          <div className="mb-2 font-semibold">요구사항 체크</div>
-          <ul className="grid gap-1 text-sm">
-            {ev.points.map((p, i) => (
-              <li key={i} className="flex gap-2">
-                <span className={`w-10 shrink-0 font-semibold ${POINT_COLOR[p.status]}`}>{POINT_KO[p.status]}</span>
-                <span data-selectable>
-                  {p.pointKo ?? p.point}
-                  {p.pointKo && <span className="ml-1.5 text-xs text-ink-400">{p.point}</span>}
-                  {p.evidence && <span className="mt-0.5 block text-xs text-ink-600">근거: “{p.evidence}”</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="grid gap-3">
-        {ev.criteria.map((c) => (
-          <div key={c.key} className="rounded-xl bg-white p-4 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="font-semibold">
-                {c.nameKo} <span className="text-xs font-normal text-ink-400">{c.name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <span key={n} className={`h-2 w-5 rounded-full ${n <= c.score ? "bg-sprite-500" : "bg-sprite-100"}`} />
-                  ))}
-                </div>
-                <span className="w-8 text-right text-sm font-semibold">{c.score}/5</span>
-              </div>
-            </div>
-            {c.uncapped != null && (
-              <p className="mb-1 text-xs text-amber-600">
-                AI 점수 {c.uncapped}점 → 상한 적용 {c.score}점
-              </p>
-            )}
-            <p className="text-sm" data-selectable>
-              {c.comment}
-            </p>
-            {c.evidence.length > 0 && (
-              <ul className="mt-2 grid gap-0.5 text-xs text-ink-600" data-selectable>
-                {c.evidence.map((q, i) => (
-                  <li key={i}>“{q}”</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </section>
-
-      {ev.features && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
-          <div className="mb-1 flex items-baseline justify-between">
-            <div className="font-semibold">
-              언어 지표 <span className="text-xs font-normal text-ink-400">코드로 자동 측정 · 매번 같은 결과</span>
-            </div>
-            <span className="text-xs text-ink-600">평균 {ev.features.languageScore.toFixed(1)} / 5</span>
-          </div>
-          <ul className="mt-2 grid gap-2.5">
-            {ev.features.indicators.map((x) => (
-              <li key={x.key} className="grid gap-0.5 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="w-28 shrink-0 font-medium">{x.nameKo}</span>
-                  <div className="flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <span key={n} className={`h-1.5 w-4 rounded-full ${n <= x.score ? "bg-sky-500" : "bg-sky-100"}`} />
-                    ))}
-                  </div>
-                  <span className="truncate text-xs text-ink-400" data-selectable>
-                    {x.value}
-                  </span>
-                </div>
-                <div className="pl-[7.5rem] text-xs text-ink-600">
-                  {x.what}
-                  {x.tip && <span className="block text-sky-700">→ {x.tip}</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-          {(ev.adjustments ?? []).map((a, i) => (
-            <p key={i} className="mt-2 text-xs text-amber-700">
-              {a}
-            </p>
-          ))}
-        </section>
-      )}
-
-      {(ev.untranslated ?? 0) > 0 && (
-        <p className="-mb-2 text-xs text-ink-400">
-          피드백 {ev.untranslated}개는 번역 품질 검사를 통과하지 못해 영어 원문으로 보여요.
-        </p>
-      )}
-
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <div className="mb-2 font-semibold">총평</div>
-        <p className="text-sm" data-selectable>
-          {ev.overallFeedback}
-        </p>
-      </section>
-
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <div className="mb-2 font-semibold">
-          문법 · 어휘 교정 <span className="text-xs font-normal text-ink-400">{ev.errors.length}개 · 클릭하면 설명</span>
         </div>
-        <CorrectionList errors={ev.errors} selected={selected} onSelect={onSelect} />
-      </section>
+      )}
 
-      {showAnalysis && ev.analysis && (
-        <details className="rounded-xl bg-white p-4 text-sm shadow-sm">
-          <summary className="cursor-pointer font-semibold text-ink-600">AI가 읽은 내용 (채점 근거)</summary>
-          <div className="mt-2 grid gap-1" data-selectable>
+      {/* 2. Points (Requirements check) */}
+      {evaluation.points && evaluation.points.length > 0 && (
+        <div className="rounded-xl bg-white p-6 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-ink-900">요구사항 체크</h3>
+          <div className="space-y-2.5">
+            {evaluation.points.map((pt, i) => {
+              const statusColorMap: Record<string, { bg: string; text: string; label: string }> = {
+                covered: { bg: "bg-emerald-100 text-emerald-800", text: "text-emerald-700", label: "다룸" },
+                partial: { bg: "bg-amber-100 text-amber-800", text: "text-amber-700", label: "부족" },
+                missing: { bg: "bg-red-100 text-red-800", text: "text-red-700", label: "빠짐" },
+              };
+              const statusInfo = statusColorMap[pt.status] || { bg: "bg-gray-100 text-gray-800", text: "text-gray-700", label: pt.status };
+
+              return (
+                <div key={i} className="rounded-lg bg-sprite-50 p-3 space-y-1">
+                  <div className="flex items-start gap-2">
+                    <span className={`shrink-0 whitespace-nowrap rounded px-2 py-0.5 text-[10px] font-bold ${statusInfo.bg}`}>
+                      {statusInfo.label}
+                    </span>
+                    <div className="min-w-0 text-sm font-medium text-ink-900">
+                      {pt.pointKo ? pt.pointKo : pt.point}
+                      {pt.pointKo && (
+                        <span className="ml-1.5 text-xs font-normal text-ink-400">({pt.point})</span>
+                      )}
+                    </div>
+                  </div>
+                  {pt.evidence && (
+                    <div className="text-xs text-ink-600 pl-2 border-l-2 border-sprite-300" data-selectable>
+                      근거: “{pt.evidence}”
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Criteria */}
+      {evaluation.criteria && evaluation.criteria.map((crit, idx) => (
+        <div key={idx} className="rounded-xl bg-white p-6 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
             <div>
-              <span className="text-ink-400">주장 · 목적 </span>
-              {ev.analysis.mainPoint}
+              <div className="text-sm font-bold text-ink-900">{crit.nameKo}</div>
+              <div className="text-xs text-ink-400">{crit.name}</div>
             </div>
-            <ul className="ml-4 list-disc text-ink-600">
-              {ev.analysis.supportGiven.map((x, i) => (
-                <li key={i}>{x}</li>
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <div
+                    key={s}
+                    className={`h-2.5 w-5 rounded-full ${
+                      s <= crit.score ? "bg-sprite-500" : "bg-sprite-100"
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="text-sm font-bold text-ink-900">{crit.score}/5</span>
+            </div>
+          </div>
+
+          {crit.uncapped != null && (
+            <div className="text-xs font-medium text-amber-700">
+              AI 점수 {crit.uncapped}점 → 상한 적용 {crit.score}점
+            </div>
+          )}
+
+          {crit.comment && (
+            <p className="text-sm text-ink-600" data-selectable>
+              {crit.comment}
+            </p>
+          )}
+
+          {crit.evidence && crit.evidence.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-black/5">
+              <span className="text-xs font-semibold text-ink-400">인용</span>
+              {crit.evidence.map((evItem, evIdx) => (
+                <div key={evIdx} className="text-xs text-ink-600 bg-sprite-50 p-2 rounded-lg" data-selectable>
+                  “{evItem}”
+                </div>
               ))}
-            </ul>
-            <div>
-              <span className="text-ink-400">부족한 점 </span>
-              {ev.analysis.notAddressed}
             </div>
+          )}
+        </div>
+      ))}
+
+      {/* 4. Language Features */}
+      {evaluation.features && (
+        <div className="rounded-xl bg-white p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-black/5 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-ink-900">언어 지표</h3>
+              <p className="text-xs text-ink-400">코드로 자동 측정 · 매번 같은 결과</p>
+            </div>
+            <span className="text-sm font-bold text-sprite-700">
+              평균 {evaluation.features.languageScore.toFixed(1)} / 5
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {evaluation.features.indicators.map((ind, i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-ink-900 w-32 truncate">{ind.nameKo}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <div
+                          key={s}
+                          className={`h-2 w-4 rounded-full ${
+                            s <= ind.score ? "bg-sky-400" : "bg-sky-100"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="font-bold text-ink-900 w-12 text-right">{ind.value}</span>
+                  </div>
+                </div>
+                {ind.what && (
+                  <div className="text-[11px] text-ink-600 pl-1">
+                    {ind.what}
+                  </div>
+                )}
+                {ind.tip && (
+                  <div className="text-[11px] text-sky-700 pl-1">
+                    → {ind.tip}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Adjustments */}
+      {evaluation.adjustments && evaluation.adjustments.length > 0 && (
+        <div className="text-xs font-medium text-amber-700 space-y-1">
+          {evaluation.adjustments.map((adj, i) => (
+            <div key={i}>• {adj}</div>
+          ))}
+        </div>
+      )}
+
+      {/* 6. Untranslated notice */}
+      {(evaluation.untranslated ?? 0) > 0 && (
+        <p className="text-xs text-ink-400">
+          피드백 {evaluation.untranslated}개는 번역 품질 검사를 통과하지 못해 영어 원문으로 보여요.
+        </p>
+      )}
+
+      {/* 7. Overall Feedback */}
+      {evaluation.overallFeedback && (
+        <div className="rounded-xl bg-white p-6 shadow-sm space-y-2">
+          <h3 className="text-sm font-bold text-ink-900">총평</h3>
+          <p className="text-sm text-ink-600 whitespace-pre-wrap" data-selectable>
+            {evaluation.overallFeedback}
+          </p>
+        </div>
+      )}
+
+      {/* 8. Grammar / Vocabulary Corrections */}
+      <div className="rounded-xl bg-white p-6 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-ink-900">문법 · 어휘 교정</h3>
+          <span className="text-xs text-ink-400">
+            {evaluation.errors?.length || 0}개 · 클릭하면 설명
+          </span>
+        </div>
+        <CorrectionList
+          errors={evaluation.errors || []}
+          selected={selected}
+          onSelect={onSelect}
+        />
+      </div>
+
+      {/* 9. Analysis */}
+      {showAnalysis !== false && evaluation.analysis && (
+        <details className="rounded-xl bg-white p-6 shadow-sm space-y-3 group">
+          <summary className="cursor-pointer text-sm font-bold text-ink-900 select-none">
+            AI가 읽은 내용 (채점 근거)
+          </summary>
+          <div className="space-y-3 pt-3 border-t border-black/5 text-sm text-ink-600">
+            <div>
+              <span className="text-xs font-bold text-ink-400 uppercase tracking-wide block mb-1">
+                주장 · 목적
+              </span>
+              <p data-selectable>{evaluation.analysis.mainPoint}</p>
+            </div>
+
+            {evaluation.analysis.supportGiven && evaluation.analysis.supportGiven.length > 0 && (
+              <div>
+                <span className="text-xs font-bold text-ink-400 uppercase tracking-wide block mb-1">
+                  근거 및 세부 내용
+                </span>
+                <ul className="list-inside list-disc space-y-1 text-xs text-ink-600">
+                  {evaluation.analysis.supportGiven.map((sup, sIdx) => (
+                    <li key={sIdx} data-selectable>{sup}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {evaluation.analysis.notAddressed && evaluation.analysis.notAddressed.length > 0 && (
+              <div>
+                <span className="text-xs font-bold text-ink-400 uppercase tracking-wide block mb-1">
+                  부족한 점
+                </span>
+                <p className="text-xs text-red-600" data-selectable>
+                  {evaluation.analysis.notAddressed}
+                </p>
+              </div>
+            )}
           </div>
         </details>
       )}

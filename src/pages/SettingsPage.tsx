@@ -3,64 +3,84 @@ import PageHeader from "../components/PageHeader";
 import GecLab from "../components/GecLab";
 import ScoringLab from "../components/ScoringLab";
 import { api, inTauri } from "../lib/api";
-import type { AppInfo, DownloadProgress, ModelEntry } from "../lib/types";
+import type { AppInfo, DownloadProgress, ModelEntry, ModelKind } from "../lib/types";
 
-const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(0);
-/** Developers fetch engines; users only ever see a reinstall hint. */
-const missing = (dev: string) => (import.meta.env.DEV ? `❌ 없음 — ${dev}` : "❌ 없음 — 앱을 다시 설치해 주세요");
+const formatBytesToMegabytes = (byteValue: number): string => (byteValue / (1024 * 1024)).toFixed(0);
+
+const resolveEngineStatusText = (isInstalled: boolean, developmentMode: boolean, installScriptCommand: string): string => {
+  if (isInstalled) return "✅ 설치됨";
+  return developmentMode ? `❌ 없음 — ${installScriptCommand}` : "❌ 없음 — 앱을 다시 설치해 주세요";
+};
 
 export default function SettingsPage() {
-  const [info, setInfo] = useState<AppInfo | null>(null);
-  const [models, setModels] = useState<ModelEntry[]>([]);
-  const [progress, setProgress] = useState<Record<string, DownloadProgress>>({});
-  const [log, setLog] = useState<string>("");
-  const [busy, setBusy] = useState(false);
+  const [details, setDetails] = useState<AppInfo | null>(null);
+  const [catalog, setCatalog] = useState<ModelEntry[]>([]);
+  const [transferProgressMap, setTransferProgressMap] = useState<Record<string, DownloadProgress>>({});
+  const [diagnosticLog, setDiagnosticLog] = useState<string>("");
+  const [isOperationLocked, setIsOperationLocked] = useState<boolean>(false);
 
-  const refresh = () => {
-    api.appInfo().then(setInfo).catch((e) => setLog(String(e)));
-    api.listModels().then(setModels).catch((e) => setLog(String(e)));
+  const fetchDashboardData = () => {
+    api.appInfo()
+      .then((res) => setDetails(res))
+      .catch((err) => setDiagnosticLog(String(err)));
+
+    api.listModels()
+      .then((res) => setCatalog(res))
+      .catch((err) => setDiagnosticLog(String(err)));
   };
 
   useEffect(() => {
     if (!inTauri()) return;
-    refresh();
-    const un = api.onDownloadProgress((p) => {
-      setProgress((prev) => ({ ...prev, [p.id]: p }));
-      if (p.done) refresh();
+    fetchDashboardData();
+
+    const progressSubscriptionPromise = api.onDownloadProgress((updatePayload) => {
+      setTransferProgressMap((prevMap) => ({ ...prevMap, [updatePayload.id]: updatePayload }));
+      if (updatePayload.done) {
+        fetchDashboardData();
+      }
     });
+
     return () => {
-      un.then((f) => f());
+      progressSubscriptionPromise.then((unsubscribe) => unsubscribe());
     };
   }, []);
 
-  const run = async (label: string, fn: () => Promise<string>) => {
-    setBusy(true);
-    setLog(`${label} 실행 중…`);
-    const t0 = performance.now();
+  const runDiagnosticProcedure = async (taskTitle: string, actionCallback: () => Promise<string>) => {
+    setIsOperationLocked(true);
+    setDiagnosticLog(`${taskTitle} 실행 중…`);
+    const startTimeStamp = performance.now();
+
     try {
-      const out = await fn();
-      setLog(`${label} (${((performance.now() - t0) / 1000).toFixed(1)}s)\n\n${out}`);
-    } catch (e) {
-      setLog(`${label} 실패\n\n${String(e)}`);
+      const outcomeMessage = await actionCallback();
+      const elapsedSeconds = ((performance.now() - startTimeStamp) / 1000).toFixed(1);
+      setDiagnosticLog(`${taskTitle} (${elapsedSeconds}s)\n\n${outcomeMessage}`);
+    } catch (err) {
+      setDiagnosticLog(`${taskTitle} 실패\n\n${String(err)}`);
     } finally {
-      setBusy(false);
+      setIsOperationLocked(false);
     }
   };
 
-  const firstInstalled = (kind: ModelEntry["kind"]) =>
-    models.find((m) => m.kind === kind && m.installed);
+  const findActiveWhisperModel = () => catalog.find((m) => m.kind === "whisper" && m.installed);
+  const findActiveLlmModel = () => catalog.find((m) => m.kind === "llm" && m.installed);
 
-  const testWhisper = () => {
-    const m = firstInstalled("whisper");
-    if (!m) return setLog("설치된 Whisper 모델이 없습니다.");
-    run(`Whisper 테스트 (${m.name})`, () => api.transcribe("__sample__", m.id));
+  const triggerWhisperDiagnostic = () => {
+    const targetModel = findActiveWhisperModel();
+    if (!targetModel) {
+      setDiagnosticLog("설치된 Whisper 모델이 없습니다.");
+      return;
+    }
+    runDiagnosticProcedure(`Whisper 테스트 (${targetModel.name})`, () => api.transcribe("__sample__", targetModel.id));
   };
 
-  const testLlm = () => {
-    const m = firstInstalled("llm");
-    if (!m) return setLog("설치된 LLM 모델이 없습니다.");
-    run(`LLM 테스트 (${m.name})`, async () => {
-      await api.llmStart(m.id);
+  const triggerLlmDiagnostic = () => {
+    const targetModel = findActiveLlmModel();
+    if (!targetModel) {
+      setDiagnosticLog("설치된 LLM 모델이 없습니다.");
+      return;
+    }
+    runDiagnosticProcedure(`LLM 테스트 (${targetModel.name})`, async () => {
+      await api.llmStart(targetModel.id);
       return api.llmChat([
         { role: "system", content: "You are a concise English tutor." },
         { role: "user", content: "In one sentence, encourage a student before a TOEFL speaking test." },
@@ -70,137 +90,187 @@ export default function SettingsPage() {
 
   if (!inTauri()) {
     return (
-      <>
+      <div className="space-y-4">
         <PageHeader title="설정 · 모델" />
         <p className="text-sm text-ink-600">앱(npm run tauri dev)에서 실행해야 모델을 관리할 수 있습니다.</p>
-      </>
+      </div>
     );
   }
 
+  const isDevEnvironment = import.meta.env.DEV;
+  const engineEngines = details?.engines;
+
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader title="설정 · 모델" subtitle="온디바이스 AI 엔진과 모델을 관리합니다." />
 
-      {info && (
-        <section className="mb-6 grid grid-cols-2 gap-x-6 gap-y-1 rounded-xl bg-white p-5 text-sm shadow-sm">
-          <div className="text-ink-400">버전</div>
-          <div>{info.version}</div>
-          <div className="text-ink-400">플랫폼</div>
-          <div>
-            {info.platform} / {info.arch}
-          </div>
-          <div className="text-ink-400">Whisper 엔진</div>
-          <div>{info.engines.whisper ? "✅ 설치됨" : missing("npm run fetch-engines")}</div>
-          <div className="text-ink-400">LLM 엔진 (llama-server)</div>
-          <div>{info.engines.llama ? "✅ 설치됨" : missing("npm run fetch-engines")}</div>
-          <div className="text-ink-400">문법 모델 런타임 (ONNX)</div>
-          <div>{info.engines.onnxruntime ? "✅ 설치됨" : missing("npm run fetch-engines -- --only=ort")}</div>
-          <div className="text-ink-400">모델 폴더</div>
-          <div className="truncate" data-selectable title={info.modelsDir}>
-            {info.modelsDir}
+      {details && (
+        <section className="rounded-xl bg-white p-5 shadow-sm">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <span className="text-ink-400">버전</span>
+            <span className="font-medium">{details.version}</span>
+
+            <span className="text-ink-400">플랫폼</span>
+            <span className="font-medium">{details.platform} / {details.arch}</span>
+
+            <span className="text-ink-400">Whisper 엔진</span>
+            <span>{resolveEngineStatusText(!!engineEngines?.whisper, isDevEnvironment, "npm run fetch-engines")}</span>
+
+            <span className="text-ink-400">LLM 엔진 (llama-server)</span>
+            <span>{resolveEngineStatusText(!!engineEngines?.llama, isDevEnvironment, "npm run fetch-engines")}</span>
+
+            <span className="text-ink-400">문법 모델 런타임 (ONNX)</span>
+            <span>{resolveEngineStatusText(!!engineEngines?.onnxruntime, isDevEnvironment, "npm run fetch-engines -- --only=ort")}</span>
+
+            <span className="text-ink-400">모델 폴더</span>
+            <span className="truncate font-mono text-xs text-ink-600" data-selectable title={details.modelsDir}>
+              {details.modelsDir}
+            </span>
           </div>
         </section>
       )}
 
-      {(["whisper", "llm", "gec"] as const).map((kind) => (
-        <section key={kind} className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold text-ink-600">
-            {kind === "whisper" ? "음성 인식 (Whisper)" : kind === "llm" ? "채점 · 생성 (LLM)" : "문법 교정 (GECToR)"}
-          </h2>
-          <ul className="grid gap-2">
-            {models
-              .filter((m) => m.kind === kind)
-              .map((m) => {
-                const p = progress[m.id];
-                const downloading = p && !p.done;
+      {(["whisper", "llm", "gec"] as ModelKind[]).map((groupKind) => {
+        const labelMap: Record<ModelKind, string> = {
+          whisper: "음성 인식 (Whisper)",
+          llm: "채점 · 생성 (LLM)",
+          gec: "문법 교정 (GECToR)",
+        };
+
+        const filteredList = catalog.filter((entry) => entry.kind === groupKind);
+
+        return (
+          <section key={groupKind} className="space-y-3">
+            <h3 className="text-sm font-bold text-ink-600">{labelMap[groupKind]}</h3>
+            <div className="grid gap-2">
+              {filteredList.map((modelEntry) => {
+                const currentProgress = transferProgressMap[modelEntry.id];
+                const activeDownloading = currentProgress && !currentProgress.done && !currentProgress.error;
+
                 return (
-                  <li key={m.id} className="flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm">
-                    <div className="flex-1">
-                      <div className="font-semibold">
-                        {m.name}
-                        {m.recommended && (
-                          <span className="ml-2 rounded bg-sprite-100 px-1.5 py-0.5 text-[11px] text-sprite-700">
+                  <div key={modelEntry.id} className="flex items-center justify-between gap-4 rounded-xl bg-white p-4 shadow-sm">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-ink-900">{modelEntry.name}</span>
+                        {modelEntry.recommended && (
+                          <span className="rounded bg-sprite-100 px-1.5 py-0.5 text-[10px] font-semibold text-sprite-700">
                             추천
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-ink-400">
-                        약 {m.sizeMb.toLocaleString()} MB · {m.minVramGb > 0 ? `VRAM ${m.minVramGb} GB 이상 권장 · ` : ""}{m.notes}
-                      </div>
-                      {m.license && <div className="mt-0.5 text-[11px] text-ink-400">라이선스: {m.license}</div>}
-                      {downloading && (
-                        <div className="mt-2 h-1.5 overflow-hidden rounded bg-sprite-100">
+                      <p className="text-xs text-ink-400">
+                        약 {modelEntry.sizeMb.toLocaleString()} MB
+                        {modelEntry.minVramGb > 0 ? ` · VRAM ${modelEntry.minVramGb} GB 이상 권장` : ""}
+                        {modelEntry.notes ? ` · ${modelEntry.notes}` : ""}
+                      </p>
+                      {modelEntry.license && (
+                        <p className="text-[11px] text-ink-400">라이선스: {modelEntry.license}</p>
+                      )}
+                      {activeDownloading && (
+                        <div className="w-48 overflow-hidden rounded-full bg-sprite-50 h-1.5 mt-2">
                           <div
-                            className="h-full bg-sprite-500 transition-all"
-                            style={{ width: p.total ? `${(p.downloaded / p.total) * 100}%` : "30%" }}
+                            className="bg-sprite-500 h-full transition-all duration-300"
+                            style={{
+                              width: currentProgress.total
+                                ? `${(currentProgress.downloaded / currentProgress.total) * 100}%`
+                                : "35%",
+                            }}
                           />
                         </div>
                       )}
-                      {p?.error && <div className="mt-1 text-xs text-red-600">{p.error}</div>}
+                      {currentProgress?.error && (
+                        <p className="text-xs text-red-600">{currentProgress.error}</p>
+                      )}
                     </div>
-                    {downloading ? (
-                      <span className="text-xs text-ink-600">
-                        {mb(p.downloaded)}
-                        {p.total ? ` / ${mb(p.total)}` : ""} MB
-                      </span>
-                    ) : m.installed ? (
-                      <button
-                        onClick={() => api.deleteModel(m.id).then(refresh)}
-                        className="text-xs text-ink-400 hover:text-red-600"
-                      >
-                        삭제
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          // Show the progress bar right away so the button can't be clicked twice.
-                          setProgress((prev) => ({
-                            ...prev,
-                            [m.id]: { id: m.id, downloaded: 0, total: null, done: false, error: null },
-                          }));
-                          api.downloadModel(m.id).catch((e) => setLog(String(e)));
-                        }}
-                        className="rounded-lg bg-sprite-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sprite-600"
-                      >
-                        다운로드
-                      </button>
-                    )}
-                  </li>
+
+                    <div className="shrink-0">
+                      {activeDownloading ? (
+                        <span className="text-xs font-medium text-ink-600">
+                          {formatBytesToMegabytes(currentProgress.downloaded)}
+                          {currentProgress.total ? ` / ${formatBytesToMegabytes(currentProgress.total)}` : ""} MB
+                        </span>
+                      ) : modelEntry.installed ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            api.deleteModel(modelEntry.id)
+                              .then(fetchDashboardData)
+                              .catch((err) => setDiagnosticLog(String(err)));
+                          }}
+                          className="text-xs font-medium text-ink-400 hover:text-red-600"
+                        >
+                          삭제
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTransferProgressMap((prev) => ({
+                              ...prev,
+                              [modelEntry.id]: { id: modelEntry.id, downloaded: 0, total: null, done: false, error: null },
+                            }));
+                            api.downloadModel(modelEntry.id).catch((failErr) => {
+                              setTransferProgressMap((prev) => ({
+                                ...prev,
+                                [modelEntry.id]: {
+                                  id: modelEntry.id,
+                                  downloaded: 0,
+                                  total: null,
+                                  done: true,
+                                  error: String(failErr),
+                                },
+                              }));
+                              setDiagnosticLog(String(failErr));
+                            });
+                          }}
+                          className="rounded-lg bg-sprite-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sprite-600"
+                        >
+                          다운로드
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
-          </ul>
-        </section>
-      ))}
+            </div>
+          </section>
+        );
+      })}
 
-      <GecLab gec={models.find((m) => m.kind === "gec" && m.installed)} runtime={info?.engines.onnxruntime ?? false} />
-
-      <ScoringLab
-        llms={models.filter((m) => m.kind === "llm" && m.installed)}
-        whisperId={firstInstalled("whisper")?.id}
+      <GecLab
+        gec={catalog.find((m) => m.kind === "gec" && m.installed)}
+        runtime={details?.engines.onnxruntime ?? false}
       />
 
-      <section className="rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-ink-600">엔진 연결 테스트</h2>
-        <div className="mb-3 flex gap-2">
+      <ScoringLab
+        llms={catalog.filter((m) => m.kind === "llm" && m.installed)}
+        whisperId={findActiveWhisperModel()?.id}
+      />
+
+      <section className="rounded-xl bg-white p-5 shadow-sm space-y-3">
+        <h3 className="text-sm font-bold text-ink-600">엔진 연결 테스트</h3>
+        <div className="flex gap-2">
           <button
-            disabled={busy}
-            onClick={testWhisper}
-            className="rounded-lg border border-sprite-500 px-3 py-1.5 text-sm text-sprite-700 disabled:opacity-40"
+            type="button"
+            disabled={isOperationLocked}
+            onClick={triggerWhisperDiagnostic}
+            className="rounded-lg border border-sprite-300 px-3 py-1.5 text-xs font-semibold text-sprite-700 hover:bg-sprite-50 disabled:opacity-40"
           >
             Whisper 샘플 전사
           </button>
           <button
-            disabled={busy}
-            onClick={testLlm}
-            className="rounded-lg border border-sprite-500 px-3 py-1.5 text-sm text-sprite-700 disabled:opacity-40"
+            type="button"
+            disabled={isOperationLocked}
+            onClick={triggerLlmDiagnostic}
+            className="rounded-lg border border-sprite-300 px-3 py-1.5 text-xs font-semibold text-sprite-700 hover:bg-sprite-50 disabled:opacity-40"
           >
             LLM 한 문장 생성
           </button>
         </div>
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-sprite-50 p-3 text-xs" data-selectable>
-          {log || "—"}
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-sprite-50 p-3 font-mono text-xs text-ink-900" data-selectable>
+          {diagnosticLog || "—"}
         </pre>
       </section>
-    </>
+    </div>
   );
 }

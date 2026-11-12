@@ -15,13 +15,18 @@ export interface RepeatResult {
   ops: WordOp[];
 }
 
-const NUMBER_WORDS: Record<string, string> = {
-  "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four", "5": "five",
-  "6": "six", "7": "seven", "8": "eight", "9": "nine", "10": "ten", "11": "eleven", "12": "twelve",
-};
+const ONES = [
+  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+  "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+  "seventeen", "eighteen", "nineteen",
+];
+
+const TENS = [
+  "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+];
 
 /**
- * Lower-case, unify apostrophes, drop punctuation, spell out small numbers
+ * Lower-case, unify apostrophes, drop punctuation, spell out small numbers from 0 ~ 99
  * (Whisper writes "9" where the target says "nine").
  */
 export function normalizeWords(text: string): string[] {
@@ -33,7 +38,14 @@ export function normalizeWords(text: string): string[] {
     .split(/\s+/)
     .map((w) => w.replace(/^'+|'+$/g, ""))
     .filter(Boolean)
-    .map((w) => NUMBER_WORDS[w] ?? w);
+    .flatMap((w) => {
+      if (!/^\d{1,2}$/.test(w)) return [w];
+      const n = Number(w);
+      if (n < 20) return [ONES[n]];
+      const tens = TENS[Math.floor(n / 10)];
+      const ones = n % 10;
+      return ones === 0 ? [tens] : [tens, ONES[ones]];
+    });
 }
 
 export function alignWords(ref: string[], hyp: string[]): WordOp[] {

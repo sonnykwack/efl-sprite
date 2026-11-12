@@ -14,6 +14,12 @@ export const PREPOSITIONS = new Set([
   "until", "since", "over", "under", "between", "among", "through", "toward", "towards",
   "without", "within", "after", "before", "like", "as", "upon", "across", "against", "around",
 ]);
+const POSSESSIVES = new Set(["my", "your", "his", "her", "its", "our", "their"]);
+const COMMON_TRANSITIVE_VERBS = new Set([
+  "eat", "have", "buy", "need", "want", "love", "read", "make", "get", "take", "use",
+  "see", "bring", "play", "watch", "share", "visit",
+]);
+
 const AUX_PAIRS = [
   ["is", "are"], ["was", "were"], ["has", "have"], ["does", "do"], ["am", "are"], ["am", "is"],
   ["doesn't", "don't"], ["isn't", "aren't"], ["wasn't", "weren't"], ["hasn't", "haven't"],
@@ -62,8 +68,18 @@ export function mapGecEdit(e: GecEdit, response?: string): MappedGec {
   const c = e.corrected.trim();
   const arrow = `${o || "(없음)"} → ${c || "(삭제)"}`;
   const before = prevWord(response, e.start);
-  if ((label === "$TRANSFORM_VERB_VB_VBZ" || label === "$TRANSFORM_AGREEMENT_PLURAL") && (PLURAL_CUES.has(before) || /^\d+$/.test(before))) {
-    return { category: "plural", why: `앞에 '${before}'가 있어서 명사를 복수형으로 써야 해요: ${arrow}` };
+
+  if (label === "$TRANSFORM_VERB_VB_VBZ" || label === "$TRANSFORM_AGREEMENT_PLURAL") {
+    if (PLURAL_CUES.has(before) || /^\d+$/.test(before)) {
+      return { category: "plural", why: `앞에 '${before}'가 있어서 명사를 복수형으로 써야 해요: ${arrow}` };
+    }
+    if (
+      POSSESSIVES.has(before) ||
+      PREPOSITIONS.has(before) ||
+      COMMON_TRANSITIVE_VERBS.has(before)
+    ) {
+      return { category: "plural", why: `여기서는 명사를 복수형으로 써야 해요: ${arrow}` };
+    }
   }
 
   if (label.startsWith("$APPEND_")) {
