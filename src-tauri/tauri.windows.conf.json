@@ -3,7 +3,8 @@
   "bundle": {
     "targets": ["nsis"],
     "resources": {
-      "engines/windows/": "engines/"
+      "engines/windows/": "engines/",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "windows": {
       "webviewInstallMode": { "type": "embedBootstrapper" },

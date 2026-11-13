@@ -320,10 +320,16 @@ npm run tauri dev
 | 음성 인식 | Whisper small.en (기본) / base.en / medium.en | 0.1–0.5 GB | OpenAI Whisper, MIT |
 | 채점·생성 | **Qwen2.5-7B-Instruct** (기본, Q4_K_M) | 4.5 GB | Apache-2.0 |
 | 채점 (고정밀) | Qwen2.5-14B-Instruct (Q4_K_M) | 9 GB | Apache-2.0 · 메모리 24 GB 이상 권장 |
-| 채점 (저사양) | Qwen2.5-3B-Instruct / Gemma 3 4B | 2–2.4 GB | 각 모델의 라이선스 조건 적용 |
-| 문법 교정 | GECToR RoBERTa-base 5k (ONNX) | 0.5 GB | MIT — letheviet/gector-roberta-base-5k-onnx (gotutiyan/gector 기반) |
+| 채점 (저사양) | Qwen2.5-3B-Instruct | 2 GB | **Qwen Research License — 비상업·연구용 전용** (상업적 이용 불가) |
+| 채점 (저사양) | Gemma 3 4B | 2.4 GB | Gemma Terms of Use (금지 용도 정책 준수 조건) |
+| 문법 교정 | GECToR RoBERTa-base 5k (ONNX) | 0.5 GB | MIT — letheviet/gector-roberta-base-5k-onnx (gotutiyan/gector 기반). 학습 데이터(NUCLE, FCE, W&I+LOCNESS)는 비상업 이용 조건 |
 
 엔진: [llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT) · [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT) · [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT) · [Tauri](https://tauri.app) (MIT/Apache-2.0)
+
+- 저작권 표시와 라이선스 전문: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) (앱 설치 폴더에도 함께 들어갑니다)
+- 법적 고지 점검표(라이선스, 상표, AI 기본법, 개인정보): [`docs/legal.md`](docs/legal.md)
+- Gemma is provided under and subject to the Gemma Terms of Use found at ai.google.dev/gemma/terms
+- TOEFL은 ETS의 등록 상표이며, 이 앱은 ETS가 보증하거나 승인하지 않았습니다. *TOEFL is a registered trademark of ETS. This product is not endorsed or approved by ETS.*
 
 ---
 
