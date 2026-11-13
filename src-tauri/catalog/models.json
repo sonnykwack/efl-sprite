@@ -8,7 +8,8 @@
     "sizeMb": 142,
     "minVramGb": 0,
     "recommended": false,
-    "notes": "가장 가벼움 · 저사양 PC용"
+    "notes": "가장 가벼움 · 저사양 PC용",
+    "license": "MIT — OpenAI Whisper"
   },
   {
     "id": "whisper-small-en",
@@ -19,7 +20,8 @@
     "sizeMb": 466,
     "minVramGb": 2,
     "recommended": true,
-    "notes": "정확도·속도 균형 · 기본값"
+    "notes": "정확도·속도 균형 · 기본값",
+    "license": "MIT — OpenAI Whisper"
   },
   {
     "id": "whisper-medium-en-q5",
@@ -30,7 +32,8 @@
     "sizeMb": 515,
     "minVramGb": 4,
     "recommended": false,
-    "notes": "억양이 강한 발화에 더 강함 · 느림"
+    "notes": "억양이 강한 발화에 더 강함 · 느림",
+    "license": "MIT — OpenAI Whisper"
   },
   {
     "id": "llm-qwen2.5-3b",
@@ -42,7 +45,8 @@
     "minVramGb": 4,
     "recommended": false,
     "notes": "저사양 PC용 · 채점 흔들림 있음 (v2 프롬프트)",
-    "prompt": "v2"
+    "prompt": "v2",
+    "license": "Qwen Research License — 비상업·연구용 전용 (상업적 이용 불가)"
   },
   {
     "id": "llm-gemma3-4b",
@@ -54,7 +58,8 @@
     "minVramGb": 6,
     "recommended": false,
     "notes": "영어 첨삭 문장이 자연스러움",
-    "prompt": "v4"
+    "prompt": "v4",
+    "license": "Gemma Terms of Use — 금지 용도 정책 준수 조건 (ai.google.dev/gemma/terms)"
   },
   {
     "id": "llm-qwen2.5-7b",
@@ -66,7 +71,8 @@
     "minVramGb": 8,
     "recommended": true,
     "notes": "기본값 · 교사 채점과 가장 가까움 (v4 프롬프트)",
-    "prompt": "v4"
+    "prompt": "v4",
+    "license": "Apache-2.0 — Alibaba Cloud Qwen"
   },
   {
     "id": "llm-qwen2.5-14b",
@@ -80,7 +86,8 @@
     "notes": "고정밀 · 판단이 더 정교하지만 7B보다 약 2배 느림 · 메모리 24GB 이상 권장",
     "prompt": "v4",
     "parallel": 2,
-    "ctxPerSlot": 6144
+    "ctxPerSlot": 6144,
+    "license": "Apache-2.0 — Alibaba Cloud Qwen"
   },
   {
     "id": "gec-gector-roberta-base-5k",

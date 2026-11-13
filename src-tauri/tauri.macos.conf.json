@@ -3,7 +3,8 @@
   "bundle": {
     "targets": ["app"],
     "resources": {
-      "engines/macos/": "engines/"
+      "engines/macos/": "engines/",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "macOS": {
       "minimumSystemVersion": "12.0"

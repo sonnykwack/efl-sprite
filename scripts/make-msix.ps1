@@ -41,6 +41,8 @@ Copy-Item $exe $layout
 $engines = Join-Path $tauri "engines\windows"
 if (-not (Test-Path $engines)) { throw "$engines not found — run 'npm run fetch-engines' first" }
 Copy-Item $engines (Join-Path $layout "engines") -Recurse
+# open-source license notices must ship with the binaries (MIT/Apache-2.0)
+Copy-Item (Join-Path $tauri "..\THIRD_PARTY_NOTICES.md") $layout
 foreach ($icon in "StoreLogo.png", "Square44x44Logo.png", "Square71x71Logo.png", "Square150x150Logo.png", "Square310x310Logo.png", "Wide310x150Logo.png") {
   Copy-Item (Join-Path $tauri "icons\$icon") (Join-Path $layout "Assets\$icon")
 }
