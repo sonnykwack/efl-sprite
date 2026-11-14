@@ -1,6 +1,6 @@
 # EFL Sprite 개인정보처리방침 / Privacy Policy
 
-시행일 / Effective date: 2026-11-08
+시행일 / Effective date: 2026-11-14 (이전 버전 2026-11-08 / previous version 2026-11-08)
 
 ---
 
@@ -36,8 +36,10 @@ EFL Sprite(이하 "앱")는 사용자의 개인정보를 수집하거나 외부�
 "파일로 내보내기"로 만든 문제 파일(.eflsprite)에는 문제 내용과 사용자가 입력한 세트 이름·작성자만 들어가며, 학생 답안이나 점수는 포함되지 않습니다. 파일을 누구에게 보낼지는 사용자가 직접 결정합니다.
 
 ### 6. 정보 삭제
-- 앱에서 문제나 기록을 삭제하면 기기에서 즉시 삭제됩니다.
-- 앱을 제거하면 앱 데이터 폴더의 모든 정보가 함께 삭제됩니다.
+- 문제를 삭제하면 그 문제로 응시한 기록, 채점 결과, 교사 첨삭이 기기에서 함께 삭제됩니다. 응시 기록을 하나씩 삭제하는 기능은 아직 없습니다.
+- 스피킹 녹음 파일은 문제를 삭제해도 앱 데이터 폴더의 `audio` 폴더에 남습니다. 이 폴더를 직접 지우거나 앱을 제거하면 삭제됩니다.
+- **Microsoft Store 버전**은 앱을 제거하면 앱 데이터 폴더의 모든 정보가 함께 삭제됩니다.
+- GitHub에서 받은 **설치 파일 버전**은 제거할 때 "앱 데이터 삭제"를 선택하거나 데이터 폴더(Windows `%APPDATA%\com.xogns.eflsprite`, macOS `~/Library/Application Support/com.xogns.eflsprite`)를 직접 지우면 삭제됩니다.
 
 ### 7. 아동의 개인정보
 앱은 계정 생성이나 연락처 수집 기능이 없으며, 모든 정보는 기기 안에만 저장됩니다.
@@ -81,7 +83,10 @@ No personal information is shared with or sold to third parties.
 Task files exported by the user (.eflsprite) contain only task content and the set name/author the user typed. They never contain student responses or scores. The user decides whom to send them to.
 
 ### 6. Deletion
-Deleting tasks or records in the app removes them from the device immediately. Uninstalling the app removes all data in its app data folder.
+- Deleting a task removes its attempts, scores and teacher reviews from the device. Deleting individual attempts is not yet supported.
+- Speaking recordings stay in the `audio` folder of the app data folder even after their task is deleted; they are removed when that folder is deleted or the app is uninstalled.
+- **Microsoft Store version**: uninstalling the app removes all data in its app data folder.
+- **Installer version from GitHub**: choose "delete application data" when uninstalling, or delete the data folder yourself (Windows `%APPDATA%\com.xogns.eflsprite`, macOS `~/Library/Application Support/com.xogns.eflsprite`).
 
 ### 7. Children
 The app has no accounts and collects no contact information. All data stays on the device.

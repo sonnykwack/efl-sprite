@@ -435,12 +435,14 @@
   <li>음성 인식이 학습자의 틀린 발화를 고쳐서 받아 적을 수 있어 따라 말하기 정확도가 과대 추정될 수 있다.</li>
   <li>교사 점수 표본(8건)이 적어 환산표와 지표 기준값은 임시값이다.</li>
   <li>채점 시간은 PC 성능에 좌우된다(Apple Silicon 7B 기준 1회 40–70초).</li>
+  <li>응시 기록을 하나씩 삭제할 수 없다. 문제를 삭제하면 그 기록이 함께 지워지지만 스피킹 녹음 파일은 데이터 폴더에 남는다(개인정보처리방침에 명시).</li>
 </ul>
 <h2>9.3 향후 과제</h2>
 <ul>
   <li>새 답안과 ETS 기술 기준표, 강사 2인 채점으로 최종 검증하고 사람 간 일치도와 비교</li>
   <li>교사 첨삭의 맞음/틀림 데이터로 교정 규칙과 환산표를 자동 보정</li>
   <li>발음 평가 모델 연동, 실제 학생 답안 데이터 수집(동의 기반)</li>
+  <li>기록별 삭제 기능과 녹음 파일 정리(문제·기록 삭제 시 녹음 파일도 함께 삭제)</li>
 </ul>
 
 <!-- ======================= APPENDIX ======================= -->
@@ -464,7 +466,7 @@
   <tr><td><code>samples/</code></td><td>예시 문제 파일(<code>.eflsprite</code>)</td></tr>
 </table>
 <h2>C. 사용한 오픈소스와 모델</h2>
-<p class="small">Tauri (MIT/Apache-2.0) · llama.cpp (MIT) · whisper.cpp (MIT) · ONNX Runtime (MIT) · OpenAI Whisper 모델 (MIT) · Qwen2.5-7B/14B-Instruct (Apache-2.0) · GECToR RoBERTa-base 5k ONNX — letheviet/gector-roberta-base-5k-onnx, gotutiyan/gector 기반 (MIT)</p>
+<p class="small">Tauri (MIT/Apache-2.0) · llama.cpp (MIT) · whisper.cpp (MIT) · ONNX Runtime (MIT) · OpenAI Whisper 모델 (MIT) · Qwen2.5-7B/14B-Instruct (Apache-2.0) · GECToR RoBERTa-base 5k ONNX — letheviet/gector-roberta-base-5k-onnx, gotutiyan/gector 기반 (MIT, 학습 데이터는 비상업 이용 조건) · 선택 모델: Qwen2.5-3B-Instruct (Qwen Research License, 비상업·연구용 전용), Gemma 3 4B (Gemma Terms of Use). 저작권 고지 전문은 저장소의 <code>THIRD_PARTY_NOTICES.md</code>.</p>
 <h2>D. 참고 자료</h2>
 <ol class="small">
   <li>ETS, TOEFL iBT Writing scoring guides (Write an Email / Academic Discussion).</li>
