@@ -24,7 +24,7 @@
 | 항목 | 위치 |
 |---|---|
 | 프로젝트 결과보고서 (PDF) | [`EFL-Sprite_결과보고서.pdf`](EFL-Sprite_결과보고서.pdf) (저장소 최상위) |
-| 시연 영상 | 🎬 *(유튜브 링크 — 업로드 후 추가)* |
+| 시연 영상 | 🎬 [YouTube — EFL Sprite 시연](https://youtu.be/Fr_a9Gi9KVw) |
 | Microsoft Store | [EFL Sprite](https://apps.microsoft.com/detail/9MZT0SB40M2W) (2026-11-09 v0.1.0 게시, 11-12 v0.1.1 업데이트 게시) |
 | 실행 파일 | [Releases](https://github.com/sonnykwack/efl-sprite/releases) — Windows 설치 파일 · macOS 앱 · 스토어 패키지(MSIX) |
 | 소스 코드 | 이 저장소 (`src/` UI, `src-tauri/` Rust 백엔드) |
