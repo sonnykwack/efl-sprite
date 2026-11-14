@@ -119,19 +119,6 @@ Task types follow TOEFL iBT 2026: `listen_repeat`, `interview` (speaking); `emai
 - `evaluations.teacher_score` stores the teacher's score for the agreement study in the report.
 - Settings → 채점 실험실 measures consistency (N runs, mean ± SD), grounding %, latency.
 
-## Plan (2026-11)
-| Day | Date | Milestone |
-|---|---|---|
-| 1 | 11/3 | Scaffold + CI green on macOS & Windows |
-| 2 | 11/4 | Engines: fetch script works on both OSes; Settings → sample transcription + one LLM sentence |
-| 3 | 11/5 | Model download UX, GPU detection (`llama-server --list-devices`) |
-| 4–5 | 11/6–7 | Task CRUD, attempt screen (timers, mic → 16 kHz WAV), scoring pipeline |
-| 6–7 | 11/8–9 | Result screen, sample answers, history, teacher view |
-| 8 | 11/10 | Error handling, onboarding |
-| 9 | 11/11 | MSIX packaging (mic capability), install test on Windows |
-| 10 | 11/12 | Teacher-vs-app agreement data |
-| 11–12 | 11/13–14 | Store listing + submission |
-| 13–14 | 11/15–16 | Report/slides; resubmission buffer |
 
 Product name: **EFL Sprite** · identifier `com.xogns.eflsprite`. Never put "TOEFL"/"ETS" in the
 product name (trademark); "TOEFL-style practice" in descriptions is fine.
