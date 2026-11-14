@@ -253,6 +253,8 @@ flowchart LR
 | 업데이트 | v0.1.1(11/12): 화면 참조 작성과 실기기 테스트 수정 사항 반영, 새 화면 스크린샷으로 업데이트 제출, 같은 날 인증 통과 후 게시 |
 | 등록 정보 | [스토어 소개 문구·심사 메모](docs/store-listing.md) · [개인정보처리방침](docs/privacy-policy.md) |
 
+<p align="center"><img src="docs/report-source/img/store-page.jpg" width="720" alt="Microsoft Store에 게시된 EFL Sprite"/><br/><sub>Microsoft Store에 게시된 EFL Sprite (v0.1.1)</sub></p>
+
 **테스트 설치** (Windows): Actions 아티팩트 `efl-sprite-msix`를 받은 뒤
 
 ```powershell
