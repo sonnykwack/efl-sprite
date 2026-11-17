@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>EFL Sprite 포스터</title>
+<style>
+  @page { size: 900mm 1400mm; margin: 0; }
+  :root { --ink:#14211b; --muted:#4b5b53; --green:#22b57a; --deep:#127450; --dark:#0b4a34; --tint:#f2fbf6; --line:#cfe3d8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 900mm; height: 1400mm; }
+  body { font-family: "Noto Sans CJK KR", sans-serif; color: var(--ink); background: #fff; font-size: 10.6mm; line-height: 1.5; }
+  .page { width: 900mm; height: 1400mm; padding: 26mm 28mm 20mm; display: flex; flex-direction: column; gap: 14mm; justify-content: space-between;
+          background: linear-gradient(180deg, #e9f7ef 0, #ffffff 300mm); }
+
+  /* header */
+  header { background: linear-gradient(120deg, var(--dark), var(--deep) 60%, #1d9a69); color: #fff; border-radius: 14mm;
+           padding: 20mm 26mm; display: flex; align-items: center; gap: 22mm; }
+  header img { width: 104mm; height: 104mm; border-radius: 22mm; box-shadow: 0 3mm 8mm rgba(0,0,0,.25); }
+  .hgroup { flex: 1; }
+  .kicker { display: inline-block; font-size: 9.5mm; font-weight: 700; letter-spacing: .6mm; background: rgba(255,255,255,.16);
+            padding: 2mm 7mm; border-radius: 20mm; }
+  h1 { font-size: 44mm; line-height: 1.05; font-weight: 900; margin: 4mm 0 2mm; letter-spacing: -.6mm; }
+  .sub { font-size: 15.5mm; font-weight: 700; }
+  .one { font-size: 11mm; margin-top: 4mm; opacity: .95; }
+  .meta { margin-top: 7mm; display: flex; gap: 6mm; flex-wrap: wrap; font-size: 9.5mm; }
+  .meta span { background: #fff; color: var(--deep); font-weight: 700; padding: 2mm 7mm; border-radius: 3mm; }
+  .meta span.ghost { background: transparent; color: #fff; border: .6mm solid rgba(255,255,255,.5); font-weight: 500; }
+
+  .row { display: grid; gap: 14mm; }
+  .card { background: #fff; border: 1.2mm solid var(--line); border-radius: 10mm; padding: 13mm 15mm; }
+  h2 { font-size: 16mm; font-weight: 900; color: var(--deep); padding-bottom: 4mm; margin-bottom: 7mm; border-bottom: .9mm solid var(--line);
+       display: flex; align-items: baseline; gap: 5mm; }
+  h2 .n { color: var(--green); }
+  h3 { font-size: 11.5mm; color: var(--deep); font-weight: 800; margin: 2mm 0 2mm; }
+  p { margin-bottom: 4mm; }
+  b { font-weight: 800; }
+  ul.dot { list-style: none; }
+  ul.dot li { position: relative; padding-left: 8mm; margin-bottom: 2.6mm; }
+  ul.dot li::before { content: ""; position: absolute; left: 0; top: 6.2mm; width: 3mm; height: 3mm; border-radius: 50%; background: var(--green); }
+  ul.check { list-style: none; }
+  ul.check li { position: relative; padding-left: 11mm; margin-bottom: 3mm; font-weight: 700; }
+  ul.check li::before { content: ""; position: absolute; left: 1mm; top: 3.4mm; width: 3.4mm; height: 6.4mm; border: solid var(--green);
+                        border-width: 0 1.6mm 1.6mm 0; transform: rotate(45deg); }
+  .small { font-size: 8.6mm; color: var(--muted); }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 3.2mm; margin-top: 7mm; }
+  .badges span { font-size: 8mm; font-weight: 800; padding: 1.8mm 5mm; border-radius: 2.5mm; color: #fff; background: var(--deep); }
+  .badges span.l { background: #2f3b36; } .badges span.a { background: #1d6fb8; } .badges span.g { background: var(--green); }
+
+  /* architecture */
+  .arch { display: flex; align-items: center; gap: 4mm; }
+  .box { border: 1mm solid var(--deep); border-radius: 5mm; padding: 5mm 4mm; text-align: center; font-weight: 800; font-size: 9.5mm; background: #fff; line-height: 1.3; }
+  .box small { display: block; font-weight: 500; font-size: 7.6mm; color: var(--muted); }
+  .arrow { width: 9mm; height: 1.2mm; background: var(--deep); position: relative; flex: none; }
+  .arrow::after { content: ""; position: absolute; right: -1mm; top: -2mm; border-left: 3.4mm solid var(--deep); border-top: 2.6mm solid transparent; border-bottom: 2.6mm solid transparent; }
+  .pc { flex: 1; border: 1mm dashed var(--green); border-radius: 7mm; padding: 9mm 6mm 6mm; background: var(--tint); position: relative; display: flex; align-items: center; gap: 4mm; }
+  .pc .label { position: absolute; top: -5.5mm; left: 8mm; background: var(--green); color: #fff; font-size: 7.8mm; font-weight: 800; padding: .8mm 5mm; border-radius: 20mm; }
+  .engines { display: grid; gap: 3mm; flex: 1; }
+  .engines .box { text-align: left; padding: 3mm 5mm; border-width: .8mm; }
+  .engines .box small { display: inline; margin-left: 2mm; }
+
+  /* pipeline */
+  .pipe { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3mm; margin-bottom: 8mm; }
+  .step { background: var(--tint); border: .8mm solid var(--line); border-radius: 5mm; padding: 4mm 2mm 4mm; text-align: center; font-size: 8.4mm; font-weight: 800; line-height: 1.3; position: relative; }
+  .step i { display: block; margin: 0 auto 2.5mm; width: 12mm; height: 12mm; border-radius: 50%; background: var(--deep); color: #fff; font-style: normal; font-size: 7.6mm; line-height: 12mm; }
+  .step small { display: block; font-weight: 500; font-size: 6.8mm; color: var(--muted); margin-top: 1mm; }
+
+  /* results */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 8mm; }
+  .stat { background: var(--tint); border-radius: 5mm; padding: 5mm 5mm 4mm; border-left: 2.2mm solid var(--green); }
+  .stat b { display: block; font-size: 17mm; line-height: 1.1; color: var(--deep); font-weight: 900; }
+  .stat span { font-size: 7.8mm; color: var(--muted); line-height: 1.35; display: block; }
+  .shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7mm; }
+  .shot { border-radius: 4mm; overflow: hidden; border: .8mm solid var(--line); background: #fff; }
+  .shot .cap { background: var(--deep); color: #fff; font-weight: 800; font-size: 8.6mm; padding: 2.4mm 4mm; }
+  .shot img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top left; }
+
+  /* effects + qr */
+  .effects { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .eff { background: var(--tint); border-radius: 6mm; padding: 7mm 8mm; }
+  .eff h3 { margin-top: 0; }
+  .eff p { font-size: 9.2mm; margin: 0; }
+  .qrs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; text-align: center; }
+  .qr .t { font-weight: 800; color: var(--deep); font-size: 9.6mm; border: .8mm solid var(--line); border-radius: 3mm; padding: 1mm 0; margin-bottom: 4mm; }
+  .qr img { width: 100%; aspect-ratio: 1; display: block; }
+  .qr .u { font-size: 6.6mm; color: var(--muted); margin-top: 2mm; word-break: break-all; line-height: 1.3; }
+
+  footer { margin-top: auto; text-align: center; font-size: 7.6mm; color: var(--muted); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <img src="img/icon.png" alt="">
+    <div class="hgroup">
+      <span class="kicker">2026 단국대학교 소프트웨어학과 졸업 프로젝트</span>
+      <h1>EFL Sprite</h1>
+      <div class="sub">온디바이스 AI 기반 영어 스피킹·라이팅 코치</div>
+      <div class="one">인터넷 없이 내 PC에서 돌아가는 TOEFL 스타일 말하기·쓰기 연습 — 즉시 채점, 근거 있는 첨삭, 교사 협업까지</div>
+      <div class="meta">
+        <span>곽태훈 (32210214)</span>
+        <span>Microsoft Store 게시</span>
+        <span class="ghost">EFL = English as a Foreign Language · Sprite = <b>Sp</b>eaking + W<b>rite</b></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- row 1 -->
+  <div class="row" style="grid-template-columns: 1fr 1fr;">
+    <section class="card">
+      <h2><span class="n">1.</span> 작품 개요</h2>
+      <h3>왜 만들었나</h3>
+      <ul class="dot">
+        <li>말하기·쓰기는 강사가 한 명씩 첨삭해야 해서 <b>피드백이 며칠씩 늦습니다.</b></li>
+        <li>2026년 TOEFL iBT가 개편됐지만, <b>새 유형으로 연습·채점할 도구</b>가 거의 없습니다.</li>
+        <li>기존 AI 첨삭은 답안과 녹음을 <b>외부 서버로 보내고</b>, 점수의 근거를 설명하지 못합니다.</li>
+      </ul>
+      <h3>EFL Sprite란</h3>
+      <p>음성 인식·채점 AI·문법 교정 모델을 <b>모두 학생 PC 안에서 실행</b>해, 새 TOEFL의 4개 유형을 실제 시험처럼 응시하고 <b>즉시 근거 있는 채점과 첨삭</b>을 받는 데스크톱 앱입니다. 강사는 AI 결과를 검토하고 직접 첨삭합니다.</p>
+    </section>
+
+    <section class="card">
+      <h2>주요 기능</h2>
+      <ul class="dot">
+        <li><b>TOEFL iBT 2026 4개 유형</b> 응시 — Listen and Repeat · Interview · Email · Academic Discussion</li>
+        <li><b>추정 밴드(1–6)</b>와 항목별 점수(0–5), 점수마다 <b>학생 본인의 문장을 근거로 인용</b></li>
+        <li>밑줄을 누르면 <b>고친 표현 · 틀린 이유 · 문법 원칙 · 예문</b> (한국어)</li>
+        <li>따라 말하기 <b>단어별 정확도</b>와 내 녹음 다시 듣기</li>
+        <li><b>교사 직접 첨삭</b>, AI 교정 맞음·틀림 검토, 교사–AI 일치도</li>
+        <li><b>AI 문제 생성</b>, 문제 세트 파일(.eflsprite) 공유</li>
+      </ul>
+      <div class="badges">
+        <span>Tauri v2</span><span class="l">Rust</span><span class="a">React</span><span class="a">TypeScript</span><span class="a">Tailwind CSS</span>
+        <span class="l">SQLite</span><span class="g">llama.cpp</span><span class="g">whisper.cpp</span><span class="g">ONNX Runtime</span><span class="g">Qwen2.5</span><span class="g">GECToR</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- row 2 -->
+  <div class="row" style="grid-template-columns: 1fr 1fr;">
+    <section class="card">
+      <h2><span class="n">2.</span> 작품 구성</h2>
+      <div class="arch">
+        <div class="box" style="width:46mm">학생<br>강사</div>
+        <div class="arrow"></div>
+        <div class="pc">
+          <span class="label">내 PC 안에서만 동작</span>
+          <div class="box" style="width:62mm">화면<small>React · TypeScript</small></div>
+          <div class="arrow"></div>
+          <div class="box" style="width:62mm">백엔드<small>Tauri v2 · Rust</small></div>
+          <div class="arrow"></div>
+          <div class="engines">
+            <div class="box">whisper.cpp<small>음성 인식</small></div>
+            <div class="box">llama.cpp<small>채점 LLM</small></div>
+            <div class="box">ONNX Runtime<small>GECToR 문법</small></div>
+            <div class="box">SQLite<small>기록 저장</small></div>
+          </div>
+        </div>
+      </div>
+      <ul class="dot" style="margin-top:9mm">
+        <li>답안·녹음·점수는 <b>PC 밖으로 나가지 않음</b>. 인터넷은 처음 모델을 받을 때만 사용</li>
+        <li>macOS에서 개발해 Windows로 배포 — <b>모든 커밋마다 두 OS 자동 빌드</b> (GitHub Actions)</li>
+        <li>한글 사용자 폴더, 엔진 프로세스 관리, 16 kHz 녹음 등 <b>OS 차이를 코드로 흡수</b></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">3.</span> 개발 세부 내용 — 하이브리드 채점</h2>
+      <div class="pipe">
+        <div class="step"><i>1</i>답안·녹음<small>타이머·자동 제출</small></div>
+        <div class="step"><i>2</i>음성 인식<small>Whisper</small></div>
+        <div class="step"><i>3</i>문법 검사<small>규칙 + GECToR</small></div>
+        <div class="step"><i>4</i>LLM 채점<small>근거 → 점수</small></div>
+        <div class="step"><i>5</i>검증·보정<small>인용·상한·지표</small></div>
+        <div class="step"><i>6</i>한국어 피드백<small>+ 교사 첨삭</small></div>
+      </div>
+      <ul class="dot">
+        <li><b>역할 분담</b> — 문법은 학습자 문법 모델과 규칙이, 내용·논리는 LLM이 판단해 가짜 교정을 줄임</li>
+        <li><b>근거 먼저</b> — JSON 스키마로 "학생 문장 인용 → 코멘트 → 점수" 순서를 강제, 3회 채점의 중앙값 사용</li>
+        <li><b>인용 보정</b> — 모델이 인용한 문장을 원문 구간에 맞춰 근거 일치율 67% → 96%</li>
+        <li><b>측정 지표</b> — 어휘 다양성·문장 구조·오류 밀도를 코드로 측정해 점수 보정</li>
+        <li><b>GECToR Rust 포팅</b> — Python 없이 ONNX Runtime으로 문장당 약 0.1초</li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- row 3 -->
+  <div class="row" style="grid-template-columns: 290mm 1fr;">
+    <section class="card">
+      <h2><span class="n">4.</span> 구현 결과</h2>
+      <div class="stats">
+        <div class="stat"><b>0.44</b><span>교사–AI 평균 오차(밴드)<br>블라인드 8건, 예비</span></div>
+        <div class="stat"><b>75%</b><span>±0.5 밴드 이내 일치</span></div>
+        <div class="stat"><b>≤ 0.47</b><span>반복 채점 표준편차<br>(Qwen2.5-7B)</span></div>
+        <div class="stat"><b>7 / 7</b><span>의도적 문법 오류 검출<br>잘못된 교정 0건</span></div>
+      </div>
+      <ul class="check">
+        <li>4개 유형 응시·채점</li>
+        <li>근거 인용 채점 · 클릭 첨삭</li>
+        <li>교사 첨삭 · 일치도 측정</li>
+        <li>AI 문제 생성 · 파일 공유</li>
+        <li>Windows · macOS 지원</li>
+        <li>Microsoft Store 게시·업데이트</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>주요 서비스 화면</h2>
+      <div class="shots">
+        <div class="shot"><div class="cap">라이팅 응시</div><img src="img/s-writing.jpg" alt=""></div>
+        <div class="shot"><div class="cap">채점 결과 · 근거</div><img src="img/s-1.jpg" alt=""></div>
+        <div class="shot"><div class="cap">클릭해서 보는 교정</div><img src="img/s-2.jpg" alt=""></div>
+        <div class="shot"><div class="cap">교사 직접 첨삭</div><img src="img/s-4.jpg" alt=""></div>
+        <div class="shot"><div class="cap">따라 말하기 결과</div><img src="img/s-6.jpg" alt=""></div>
+        <div class="shot"><div class="cap">기록 · 교사–AI 일치도</div><img src="img/s-7.jpg" alt=""></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- row 4 -->
+  <div class="row" style="grid-template-columns: 1fr 1fr;">
+    <section class="card">
+      <h2><span class="n">5.</span> 기대효과 및 활용 가능성</h2>
+      <div class="effects">
+        <div class="eff"><h3>즉시 피드백</h3><p>밤에 쓴 글도 1분 안에 근거 있는 채점과 첨삭. 같은 문제를 몇 번이고 다시 연습</p></div>
+        <div class="eff"><h3>강사 시간 절약</h3><p>처음부터 첨삭하는 대신 AI 결과를 검토만. AI 교정 정확도도 함께 측정</p></div>
+        <div class="eff"><h3>개인정보 보호</h3><p>학생 데이터가 PC 밖으로 나가지 않고, 인터넷이 막힌 컴퓨터실에서도 동작</p></div>
+        <div class="eff"><h3>확장성</h3><p>문제 파일로 반별 배포. 발음 평가, 교사 데이터로 하는 채점 보정으로 확장</p></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>QR Code</h2>
+      <div class="qrs">
+        <div class="qr"><div class="t">Microsoft Store</div><img src="img/qr-store.svg" alt=""><div class="u">apps.microsoft.com/detail/9MZT0SB40M2W</div></div>
+        <div class="qr"><div class="t">GitHub</div><img src="img/qr-github.svg" alt=""><div class="u">github.com/sonnykwack/efl-sprite</div></div>
+        <div class="qr"><div class="t">시연 영상</div><img src="img/qr-video.svg" alt=""><div class="u">youtu.be/Fr_a9Gi9KVw</div></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    점수는 AI 추정치이며 ETS 공식 점수가 아닙니다. TOEFL is a registered trademark of ETS. This product is not endorsed or approved by ETS.<br>
+    화면은 AI 초안을 참조해 직접 작성했고, 엔진·채점 백엔드는 AI 코딩 도구(Claude Code)를 활용해 개발했습니다.
+  </footer>
+</div>
+</body>
+</html>
